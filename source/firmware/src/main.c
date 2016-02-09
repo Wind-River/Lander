@@ -49,22 +49,29 @@ Todo:
 	x	Create 'Move' game for movement testing
 		x	no inertia/gravity (e./g. gantry motion model)
 		x	fast x/y/z
-==>	--- Demo 2 checkpoint
-	*	Game display modes
-		*	x,y,z
-		*	x,y,z,speed,fuel
-		*	cables
-	*	Large and small state LEDs
-	*	Communication with daughter Arduino-101
-		*	Serial server
-		*	Serial client
-	*	import thrust method from sample game
-	*	Implement power-up setup and calibration states
-	--- Demo 3 checkpoint
-	*	Arduino-101 with slider and I2C motor control
+	--- Demo 2 checkpoint
+	x	Game display modes
+		x	raw x,y,z,f (m units)
+		x	raw cables
+	x	Large and small state LEDs
+ 		x	Vincent's I2C code for large display, I2C adapter
+		x	small LEDs
+	x	Communication with daughter Arduino
+		x	daughter I2C connection
+		x	daughter client
+==>	--- Demo 3 checkpoint
 	*	Integration with X-Y-Z motors
+	*	Implement power-up setup and calibration states
+	*	Wait for rocket to move to game start position
+	*	import thrust method from sample game
+	*	Game enhancements
+		*	update large and small LEDs
+		*	display moon meters
+		*	trigger sounds
+		*	trigger neopixels
 	--- Demo 4 checkpoint
 	*	Enable Tracker Pan-Tilt
+>		*	Dual PWM Grove cable
 		*	cos table
 		*	PWM
 	*	Enable Tracker LED-RGB
@@ -88,6 +95,7 @@ Todo:
 #include "groveLCD.h"
 #include "hd44780Lcd.h"
 #include "groveLCDUtils.h"
+#include "Adafruit_LEDBackpack.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -219,6 +227,14 @@ void init_hardware()
 	/* Init the X-Y-Z table */
 	init_rocket_hardware();
 
+ 	// Adafruit LED Backpack
+	if (IO_LED_BACKPACK_ENABLE) {
+		bp_setdevice(i2c);
+		bp_begin();
+		bp_clear();
+		send_LED_Backpack(0);
+	}
+
 	/* Init the Tracker */
 
 	/* Init the Phone/Server */
@@ -262,7 +278,93 @@ void scan_controls ()
 		}
  	}
 
- }
+}
+
+/*
+ * LED 7-Segment Backpack display
+ *
+ */
+
+void send_LED_Backpack(uint32_t x) {
+	if (IO_LED_BACKPACK_ENABLE) {
+		seg_writeNumber(x);
+	}
+}
+
+
+/*
+ * sister board control (i2c slave)
+ *
+ */
+
+void send_I2c_slave(uint8_t *buffer,uint8_t i2c_len) {
+	if (IO_REMOTE_ENABLE) {
+		i2c_polling_write (i2c, buffer, i2c_len, SISTER_I2C_ADDRESS);
+	}
+}
+
+void sister_send_Led1(uint32_t value) {
+	uint8_t buf[10];
+	uint32_t i;
+
+	buf[0]='1';
+	for (i=4;i>0;i--) {
+		buf[i]=value % 10;
+		value /= 10;
+	}
+	send_I2c_slave(buf,5);
+}
+
+void sister_send_Led2(uint32_t value) {
+	uint8_t buf[10];
+	uint32_t i;
+
+	buf[0]='2';
+	for (i=4;i>0;i--) {
+		buf[i]=value % 10;
+		value /= 10;
+	}
+	send_I2c_slave(buf,5);
+}
+
+void sister_send_Pan_Tilt(uint32_t pan,uint32_t tilt) {
+	uint8_t buf[10];
+
+	if (IO_TRACKER_REMOTE_ENABLE) {
+		buf[0]='p';
+		buf[1]=(uint8_t) pan;
+		buf[2]=(uint8_t) tilt;
+		send_I2c_slave(buf,3);
+	} else {
+	}
+}
+
+void sister_send_Led_Rgb(uint32_t r,uint32_t g,uint32_t b) {
+	uint8_t buf[10];
+
+	buf[0]='l';
+	buf[1]=(uint8_t) r;
+	buf[2]=(uint8_t) g;
+	buf[2]=(uint8_t) b;
+	send_I2c_slave(buf,3);
+}
+
+void sister_send_NeoPixel(uint32_t pattern) {
+	uint8_t buf[10];
+
+	buf[0]='n';
+	buf[1]=(uint8_t) pattern;
+	send_I2c_slave(buf,2);
+}
+
+void sister_send_Sound(uint32_t pattern) {
+	uint8_t buf[10];
+
+	buf[0]='s';
+	buf[1]=(uint8_t) pattern;
+	send_I2c_slave(buf,2);
+}
+
 
 /*
  * init_game : initialize variables for a new game
@@ -294,17 +396,6 @@ void init_game () {
 	set_lcd_display(1," waiting ... " );
 
 
-	// set initial game controls
-
-	r_control.button_a=0;
-	r_control.button_b=0;
-	r_control.button_a_prev=false;
-    r_control.button_b_prev=false;
-
-	r_control.analog_x=JOYSTICK_X_MID;
-	r_control.analog_y=JOYSTICK_Y_MID;
-	r_control.analog_z=JOYSTICK_Z_MID;
-
 	if        (r_game.start_option == GAME_START_RANDOM) {
 		// TODO ###################
 		init_x=0;
@@ -314,21 +405,25 @@ void init_game () {
 		init_y=0;
 	}
 
-
+	// init the rocket
 	if        (r_game.game == GAME_Z_LAND) {
-		init_rocket_game(init_x, init_y, Z_POS_MAX, r_game.fuel_option, r_game.gravity_option);
+		init_rocket_game(init_x, init_y, GAME_Z_POS_MAX, r_game.fuel_option, r_game.gravity_option,GAME_PLAY);
 	} else if (r_game.game == GAME_XYZ_LAND) {
-		init_rocket_game(init_x, init_y, Z_POS_MAX, r_game.fuel_option, r_game.gravity_option);
+		init_rocket_game(init_x, init_y, GAME_Z_POS_MAX, r_game.fuel_option, r_game.gravity_option,GAME_PLAY);
 	} else if (r_game.game == GAME_XYZ_FLIGHT) {
-		init_rocket_game(init_x, init_y,         0, r_game.fuel_option, r_game.gravity_option);
+		init_rocket_game(init_x, init_y,         0, r_game.fuel_option, r_game.gravity_option,GAME_PLAY);
 	} else if (r_game.game == GAME_XYZ_AUTO) {
-		init_rocket_game(init_x, init_y, Z_POS_MAX, r_game.fuel_option, r_game.gravity_option);
+		init_rocket_game(init_x, init_y, GAME_Z_POS_MAX, r_game.fuel_option, r_game.gravity_option,GAME_PLAY);
 	} else {
-		init_rocket_game(init_x, init_y, Z_POS_MAX, r_game.fuel_option, r_game.gravity_option);
+		init_rocket_game(init_x, init_y, GAME_Z_POS_MAX, r_game.fuel_option, r_game.gravity_option,GAME_PLAY);
 	}
 
-	// LCD and debug Display mode
-	r_game.play_display_mode=GAME_DISPLAY_RAW;
+    // Preset the game display default
+	if (IO_BUTTON_BRINGUP) {
+	    r_game.play_display_mode = GAME_DISPLAY_RAW_XYZF;
+	} else {
+	    r_game.play_display_mode = GAME_DISPLAY_NORMAL;
+	}
 }
 
 /*
@@ -346,7 +441,16 @@ void init_main()
     r_game.fuel_option = GAME_FUEL_NORMAL;
     r_game.gravity_option = GAME_GRAVITY_NONE;
     r_game.start_option = GAME_START_CENTER;
-    r_game.play_display_mode = GAME_DISPLAY_RAW;
+
+	// set initial game controls
+	r_control.button_a=0;
+	r_control.button_b=0;
+	r_control.button_a_prev=false;
+    r_control.button_b_prev=false;
+
+	r_control.analog_x=JOYSTICK_X_MID;
+	r_control.analog_y=JOYSTICK_Y_MID;
+	r_control.analog_z=JOYSTICK_Z_MID;
 
 	}
 
