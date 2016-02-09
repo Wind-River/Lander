@@ -20,6 +20,8 @@
 
 #include <i2c.h>
 #include "groveLCDUtils.h"
+#include "Adafruit_LEDBackpack.h"
+#include "grove_i2c_motor.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -213,16 +215,20 @@ static void S_Game_Play_loop () {
 	}
 
 	// display the rocket state
-	if        (GAME_DISPLAY_RAW    == r_game.play_display_mode) {
+	if        (GAME_DISPLAY_RAW_XYZF  == r_game.play_display_mode) {
 		// display the rocket state
 		//	 "1234567890123456",
 		sprintf(state_array[state_now].display_1,"X=%5d  Y=%5d",r_space.rocket_x/1000,r_space.rocket_y/1000);
 		sprintf(state_array[state_now].display_2,"Z=%5d  f=%5d",r_space.rocket_z/1000,r_space.rocket_fuel);
 		display_state();
-	} else if (GAME_DISPLAY_NORMAL == r_game.play_display_mode) {
+	} else if (GAME_DISPLAY_RAW_CABLE == r_game.play_display_mode) {
 		// display the rocket state
-		sprintf(state_array[state_now].display_1,"Z=%04d X=%04d Y=%04d ",r_space.rocket_z,r_space.rocket_x,r_space.rocket_y);
-		sprintf(state_array[state_now].display_2,"S=%04d F=%04d        ",r_space.rocket_delta_z,r_space.rocket_fuel);
+		sprintf(state_array[state_now].display_1,"NW=%4d NE=%4d",
+			r_towers[ROCKET_TOWER_NW].length_goal/1000,
+			r_towers[ROCKET_TOWER_NE].length_goal/1000);
+		sprintf(state_array[state_now].display_2,"SW=%4d SE=%4d",
+			r_towers[ROCKET_TOWER_SW].length_goal/1000,
+			r_towers[ROCKET_TOWER_SE].length_goal/1000);
 		display_state();
 	} else {
 		sprintf(buffer,"Z=%02d X=%03d Y=%03d",
@@ -251,11 +257,15 @@ static void S_Game_Done_enter () {
 
 static void S_Game_Display_Next_enter () {
 	if        (GAME_DISPLAY_NORMAL == r_game.play_display_mode) {
-		r_game.play_display_mode = GAME_DISPLAY_RAW;
-	} else /* if (GAME_DISPLAY_RAW    == r_game.play_display_mode) */ {
+		r_game.play_display_mode = GAME_DISPLAY_RAW_XYZF;
+	} else if (GAME_DISPLAY_RAW_XYZF == r_game.play_display_mode) {
+		r_game.play_display_mode = GAME_DISPLAY_RAW_CABLE;
+	} else {
 		r_game.play_display_mode = GAME_DISPLAY_NORMAL;
 	}
+	jump_state("S_Game_Play");
 }
+
 
 // Select
 
@@ -335,6 +345,75 @@ static void S_IO_STATE_loop () {
 	log(buffer);
 }
 
+static void S_Test_I2C_enter () {
+	char *msg = "x";
+	static uint8_t x = 0;
+	uint8_t buf[100];
+
+	// self-test mode?
+	if (self_test) return;
+
+	strncpy(buf,msg,strlen(msg));
+	buf[strlen(msg)]=x;
+
+	PRINT("FOO\n");
+	send_I2c_slave (buf, strlen(msg)+1);
+	PRINT("BAR\n");
+
+	x++;
+
+	sister_send_Led1(1234+x);
+	sister_send_Led2(42+x);
+	sister_send_Pan_Tilt(25,57);
+	sister_send_Led_Rgb(50,100,200);
+	sister_send_NeoPixel(8);
+	sister_send_Sound(9);
+
+
+	jump_state("S_Test_I2C_Select");
+}
+
+/* 7-segment Backpack LED display support */
+
+static void S_Test_Segment_Open_enter () {
+	// self-test mode?
+	if (self_test) return;
+
+	if (IO_LED_BACKPACK_ENABLE) {
+		bp_setdevice(i2c);
+		bp_begin();
+		bp_clear();
+	}
+	jump_state("S_Test_Segment_Select");
+}
+
+static void S_Test_Segment_enter () {
+	static uint8_t x = 123;
+
+	// self-test mode?
+	if (self_test) return;
+
+	if (IO_LED_BACKPACK_ENABLE) {
+		seg_writeNumber(x);
+	}
+	x++;
+	jump_state("S_Test_Segment_Select");
+}
+
+/* Grove i2c motor controler test */
+
+static int test_motor_number=0;
+static void S_TestMotor_enter () {
+	// self-test mode?
+	if (self_test) return;
+
+	if (IO_XYZ_ENABLE) {
+		stepper_unit_test(test_motor_number);
+	}
+	jump_state("S_Test_Segment_Select");
+}
+
+
 /* Simulation support */
 static int32_t title_loop=0;
 static char* resume_state_name="S_Main_Play";
@@ -349,7 +428,7 @@ static void S_Test_Simulation_Meters_enter () {
 	sprintf(buffer,"=== Rocket Controls to Position in game space ===\n");
 	// preset start location, and options
 	r_game.game=GAME_XYZ_MOVE;
-	init_rocket_game (0, 0, Z_POS_MAX/2, GAME_FUEL_NOLIMIT, GAME_GRAVITY_NONE);
+	init_rocket_game (0, 0, Z_POS_MAX/2, GAME_FUEL_NOLIMIT, GAME_GRAVITY_NONE,GAME_SIMULATE);
 	title_loop=0;
 }
 
@@ -409,7 +488,7 @@ static void S_Test_Simulation_Cables_enter () {
 
 	// preset start location, and options
 	r_game.game=GAME_XYZ_MOVE;
-	init_rocket_game (0, 0, Z_POS_MAX/2, GAME_FUEL_NOLIMIT, GAME_GRAVITY_NONE);
+	init_rocket_game (0, 0, Z_POS_MAX/2, GAME_FUEL_NOLIMIT, GAME_GRAVITY_NONE,GAME_SIMULATE);
 	title_loop=0;
 }
 
@@ -447,7 +526,7 @@ static void S_Test_Simulation_Steps_enter () {
 
 	// preset start location, and options
 	r_game.game=GAME_XYZ_MOVE;
-	init_rocket_game (0, 0, Z_POS_MAX/2, GAME_FUEL_NOLIMIT, GAME_GRAVITY_NONE);
+	init_rocket_game (0, 0, Z_POS_MAX/2, GAME_FUEL_NOLIMIT, GAME_GRAVITY_NONE,GAME_SIMULATE);
 	title_loop=0;
 }
 
@@ -490,6 +569,8 @@ static void S_Test_Simulation_Steps_loop () {
 
 
 static int32_t antennae_number=0;
+static int32_t antennae_pan=128;
+static int32_t antennae_tilt=128;
 static void S_Test_Antennae_Select_enter () {
 	antennae_number=0;
 	jump_state("S_Test_Antennae");
@@ -498,15 +579,25 @@ static void S_Test_Antennae_enter () {
 	// initialize current PWM
 }
 static void S_Test_Antennae_loop () {
+	static int32_t value_z_prev=0;
 	// self-test mode?
 	if (self_test) return;
 
+	// map 0..1023 to 0..255, centered on joystick middle value
+	if (0 == antennae_number) {
+		antennae_pan = r_control.analog_z/4;
+	} else {
+		antennae_tilt = r_control.analog_z/4;
+	}
+
 	// pass Z to current motor's speed
-	sprintf(buffer,"[$s] Z=%3d M=???\n",
-		(0 == antennae_number) ? "Pan":"Tilt",
-		r_control.analog_z - JOYSTICK_Z_MID
-		);
-	log(buffer);
+	if (4 < abs(value_z_prev-r_control.analog_z)) {
+		sprintf(buffer,"Pan=%0x,Tilt=%0x, Z=%04d\n",
+			antennae_pan,antennae_tilt,r_control.analog_z);
+		log(buffer);
+		sister_send_Pan_Tilt(antennae_pan,antennae_tilt);
+		value_z_prev = r_control.analog_z;
+	}
 }
 static void S_Test_Antennae_exit () {
 	// stop current PWM
@@ -686,37 +777,37 @@ static void S_Test_Sanity_enter () {
 
 	PRINT("\n==== Cable Steps Calculation Test ===\n");
 	PRINT("ROCKET_TOWER_NW:\n");
-	cable_steps_start(r_towers[ROCKET_TOWER_NW].pos_x     ,r_towers[ROCKET_TOWER_NW].pos_y     ,Z_POS_MAX);
-	cable_steps_move( r_towers[ROCKET_TOWER_NW].pos_x+1000,r_towers[ROCKET_TOWER_NW].pos_y     ,Z_POS_MAX);
-	cable_steps_move( r_towers[ROCKET_TOWER_NW].pos_x+1000,r_towers[ROCKET_TOWER_NW].pos_y+1000,Z_POS_MAX);
-	cable_steps_move( r_towers[ROCKET_TOWER_NW].pos_x     ,r_towers[ROCKET_TOWER_NW].pos_y+1000,Z_POS_MAX);
-	cable_steps_move( r_towers[ROCKET_TOWER_NW].pos_x     ,r_towers[ROCKET_TOWER_NW].pos_y     ,Z_POS_MAX);
+	cable_steps_start(r_towers[ROCKET_TOWER_NW].pos_x     ,r_towers[ROCKET_TOWER_NW].pos_y     ,r_towers[ROCKET_TOWER_NW].pos_z);
+	cable_steps_move( r_towers[ROCKET_TOWER_NW].pos_x+1000,r_towers[ROCKET_TOWER_NW].pos_y     ,r_towers[ROCKET_TOWER_NW].pos_z);
+	cable_steps_move( r_towers[ROCKET_TOWER_NW].pos_x+1000,r_towers[ROCKET_TOWER_NW].pos_y+1000,r_towers[ROCKET_TOWER_NW].pos_z);
+	cable_steps_move( r_towers[ROCKET_TOWER_NW].pos_x     ,r_towers[ROCKET_TOWER_NW].pos_y+1000,r_towers[ROCKET_TOWER_NW].pos_z);
+	cable_steps_move( r_towers[ROCKET_TOWER_NW].pos_x     ,r_towers[ROCKET_TOWER_NW].pos_y     ,r_towers[ROCKET_TOWER_NW].pos_z);
 	PRINT("ROCKET_TOWER_NE:\n");
-	cable_steps_start(r_towers[ROCKET_TOWER_NE].pos_x     ,r_towers[ROCKET_TOWER_NE].pos_y     ,Z_POS_MAX);
-	cable_steps_move( r_towers[ROCKET_TOWER_NE].pos_x+1000,r_towers[ROCKET_TOWER_NE].pos_y     ,Z_POS_MAX);
-	cable_steps_move( r_towers[ROCKET_TOWER_NE].pos_x+1000,r_towers[ROCKET_TOWER_NE].pos_y+1000,Z_POS_MAX);
-	cable_steps_move( r_towers[ROCKET_TOWER_NE].pos_x     ,r_towers[ROCKET_TOWER_NE].pos_y+1000,Z_POS_MAX);
-	cable_steps_move( r_towers[ROCKET_TOWER_NE].pos_x     ,r_towers[ROCKET_TOWER_NE].pos_y     ,Z_POS_MAX);
+	cable_steps_start(r_towers[ROCKET_TOWER_NE].pos_x     ,r_towers[ROCKET_TOWER_NE].pos_y     ,r_towers[ROCKET_TOWER_NE].pos_z);
+	cable_steps_move( r_towers[ROCKET_TOWER_NE].pos_x+1000,r_towers[ROCKET_TOWER_NE].pos_y     ,r_towers[ROCKET_TOWER_NE].pos_z);
+	cable_steps_move( r_towers[ROCKET_TOWER_NE].pos_x+1000,r_towers[ROCKET_TOWER_NE].pos_y+1000,r_towers[ROCKET_TOWER_NE].pos_z);
+	cable_steps_move( r_towers[ROCKET_TOWER_NE].pos_x     ,r_towers[ROCKET_TOWER_NE].pos_y+1000,r_towers[ROCKET_TOWER_NE].pos_z);
+	cable_steps_move( r_towers[ROCKET_TOWER_NE].pos_x     ,r_towers[ROCKET_TOWER_NE].pos_y     ,r_towers[ROCKET_TOWER_NE].pos_z);
 	PRINT("ROCKET_TOWER_SW:\n");
-	cable_steps_start(r_towers[ROCKET_TOWER_SW].pos_x     ,r_towers[ROCKET_TOWER_SW].pos_y     ,Z_POS_MAX);
-	cable_steps_move( r_towers[ROCKET_TOWER_SW].pos_x+1000,r_towers[ROCKET_TOWER_SW].pos_y     ,Z_POS_MAX);
-	cable_steps_move( r_towers[ROCKET_TOWER_SW].pos_x+1000,r_towers[ROCKET_TOWER_SW].pos_y+1000,Z_POS_MAX);
-	cable_steps_move( r_towers[ROCKET_TOWER_SW].pos_x     ,r_towers[ROCKET_TOWER_SW].pos_y+1000,Z_POS_MAX);
-	cable_steps_move( r_towers[ROCKET_TOWER_SW].pos_x     ,r_towers[ROCKET_TOWER_SW].pos_y     ,Z_POS_MAX);
+	cable_steps_start(r_towers[ROCKET_TOWER_SW].pos_x     ,r_towers[ROCKET_TOWER_SW].pos_y     ,r_towers[ROCKET_TOWER_SW].pos_z);
+	cable_steps_move( r_towers[ROCKET_TOWER_SW].pos_x+1000,r_towers[ROCKET_TOWER_SW].pos_y     ,r_towers[ROCKET_TOWER_SW].pos_z);
+	cable_steps_move( r_towers[ROCKET_TOWER_SW].pos_x+1000,r_towers[ROCKET_TOWER_SW].pos_y+1000,r_towers[ROCKET_TOWER_SW].pos_z);
+	cable_steps_move( r_towers[ROCKET_TOWER_SW].pos_x     ,r_towers[ROCKET_TOWER_SW].pos_y+1000,r_towers[ROCKET_TOWER_SW].pos_z);
+	cable_steps_move( r_towers[ROCKET_TOWER_SW].pos_x     ,r_towers[ROCKET_TOWER_SW].pos_y     ,r_towers[ROCKET_TOWER_SW].pos_z);
 	PRINT("ROCKET_TOWER_SE:\n");
-	cable_steps_start(r_towers[ROCKET_TOWER_SE].pos_x     ,r_towers[ROCKET_TOWER_SE].pos_y     ,Z_POS_MAX);
-	cable_steps_move( r_towers[ROCKET_TOWER_SE].pos_x+1000,r_towers[ROCKET_TOWER_SE].pos_y     ,Z_POS_MAX);
-	cable_steps_move( r_towers[ROCKET_TOWER_SE].pos_x+1000,r_towers[ROCKET_TOWER_SE].pos_y+1000,Z_POS_MAX);
-	cable_steps_move( r_towers[ROCKET_TOWER_SE].pos_x     ,r_towers[ROCKET_TOWER_SE].pos_y+1000,Z_POS_MAX);
-	cable_steps_move( r_towers[ROCKET_TOWER_SE].pos_x     ,r_towers[ROCKET_TOWER_SE].pos_y     ,Z_POS_MAX);
+	cable_steps_start(r_towers[ROCKET_TOWER_SE].pos_x     ,r_towers[ROCKET_TOWER_SE].pos_y     ,r_towers[ROCKET_TOWER_SE].pos_z);
+	cable_steps_move( r_towers[ROCKET_TOWER_SE].pos_x+1000,r_towers[ROCKET_TOWER_SE].pos_y     ,r_towers[ROCKET_TOWER_SE].pos_z);
+	cable_steps_move( r_towers[ROCKET_TOWER_SE].pos_x+1000,r_towers[ROCKET_TOWER_SE].pos_y+1000,r_towers[ROCKET_TOWER_SE].pos_z);
+	cable_steps_move( r_towers[ROCKET_TOWER_SE].pos_x     ,r_towers[ROCKET_TOWER_SE].pos_y+1000,r_towers[ROCKET_TOWER_SE].pos_z);
+	cable_steps_move( r_towers[ROCKET_TOWER_SE].pos_x     ,r_towers[ROCKET_TOWER_SE].pos_y     ,r_towers[ROCKET_TOWER_SE].pos_z);
 	PRINT("Center:\n");
-	cable_steps_start(r_towers[ROCKET_TOWER_SE].pos_x     ,r_towers[ROCKET_TOWER_SE].pos_y     , Z_POS_MAX/2);
-	cable_steps_move( r_towers[ROCKET_TOWER_SE].pos_x+1000,r_towers[ROCKET_TOWER_SE].pos_y     ,(Z_POS_MAX/2));
-	cable_steps_move( r_towers[ROCKET_TOWER_SE].pos_x+1000,r_towers[ROCKET_TOWER_SE].pos_y+1000,(Z_POS_MAX/2));
-	cable_steps_move( r_towers[ROCKET_TOWER_SE].pos_x     ,r_towers[ROCKET_TOWER_SE].pos_y+1000,(Z_POS_MAX/2));
-	cable_steps_move( r_towers[ROCKET_TOWER_SE].pos_x     ,r_towers[ROCKET_TOWER_SE].pos_y     ,(Z_POS_MAX/2));
-	cable_steps_move( r_towers[ROCKET_TOWER_SE].pos_x     ,r_towers[ROCKET_TOWER_SE].pos_y     ,(Z_POS_MAX/2)+1000);
-	cable_steps_move( r_towers[ROCKET_TOWER_SE].pos_x     ,r_towers[ROCKET_TOWER_SE].pos_y     ,(Z_POS_MAX/2)-1000);
+	cable_steps_start(0     ,0     , r_towers[ROCKET_TOWER_NW].pos_z/2);
+	cable_steps_move( 0+1000,0     ,(r_towers[ROCKET_TOWER_NW].pos_z/2));
+	cable_steps_move( 0+1000,0+1000,(r_towers[ROCKET_TOWER_NW].pos_z/2));
+	cable_steps_move( 0     ,0+1000,(r_towers[ROCKET_TOWER_NW].pos_z/2));
+	cable_steps_move( 0     ,0     ,(r_towers[ROCKET_TOWER_NW].pos_z/2));
+	cable_steps_move( 0     ,0     ,(r_towers[ROCKET_TOWER_NW].pos_z/2)+1000);
+	cable_steps_move( 0     ,0     ,(r_towers[ROCKET_TOWER_NW].pos_z/2)-1000);
 
 	PRINT("==================\n\n");
 
@@ -770,6 +861,17 @@ void state_callback(char *call_name) {
 		S_Opt_Pos_Center_Enter();
 	else if (0 == strcmp("S_Opt_Pos_Random_Enter",call_name))
 		S_Opt_Pos_Random_Enter();
+
+	else if (0 == strcmp("S_Test_I2C_enter",call_name))
+		S_Test_I2C_enter();
+
+	else if (0 == strcmp("S_Test_Segment_Open_enter",call_name))
+		S_Test_Segment_Open_enter();
+	else if (0 == strcmp("S_Test_Segment_enter",call_name))
+		S_Test_Segment_enter();
+
+	else if (0 == strcmp("S_TestMotor_enter",call_name))
+		S_TestMotor_enter();
 
 	else if (0 == strcmp("S_IO_STATE_loop",call_name))
 		S_IO_STATE_loop();
@@ -1192,7 +1294,7 @@ void init_state () {
 	 "Setup...        ",
 //	 "1234567890123456",
 	 "I/O_Values  Next",
-	 "S_IO_STATE","S_Test_SanityTest",
+	 "S_IO_STATE","S_Test_I2cSlaveTest",
 	 ACTION_NOP,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_IO_STATE",
@@ -1201,6 +1303,82 @@ void init_state () {
 		 "  Display...    ",
 		 STATE_NOP,STATE_NOP,
 		 ACTION_NOP,"S_IO_STATE_loop",ACTION_NOP);
+
+	StateGuiAdd("S_Test_I2cSlaveTest",
+	 STATE_NO_FLAGS,
+	 "Test...         ",
+//	 "1234567890123456",
+	 "I2C_test Next",
+	 "S_Test_I2C_Select","S_Test_Segment_Test",
+	 ACTION_NOP,ACTION_NOP,ACTION_NOP);
+
+		StateGuiAdd("S_Test_I2C_Select",
+		 STATE_NO_FLAGS,
+		 "Test...         ",
+	//	 "1234567890123456",
+		 "Exit        Send",
+		 "S_Main_Play","S_Test_I2C_Send",
+		 ACTION_NOP,ACTION_NOP,ACTION_NOP);
+
+		StateGuiAdd("S_Test_I2C_Send",
+		 STATE_NO_FLAGS,
+		 "",
+		 "",
+		 STATE_NOP,STATE_NOP,
+		 "S_Test_I2C_enter",ACTION_NOP,ACTION_NOP);
+
+	StateGuiAdd("S_Test_Segment_Test",
+	 STATE_NO_FLAGS,
+	 "Test...         ",
+//	 "1234567890123456",
+	 "SegmentTest Next",
+	 "S_Test_Segment_Init","S_Test_Motor_Test",
+	 ACTION_NOP,ACTION_NOP,ACTION_NOP);
+
+		StateGuiAdd("S_Test_Segment_Init",
+		 STATE_NO_FLAGS,
+		 "",
+		 "",
+		 STATE_NOP,STATE_NOP,
+		 "S_Test_Segment_Open_enter",ACTION_NOP,ACTION_NOP);
+
+		StateGuiAdd("S_Test_Segment_Select",
+		 STATE_FROM_CALLBACK,
+		 "Test...         ",
+	//	 "1234567890123456",
+		 "Exit        Send",
+		 "S_Main_Play","S_Test_Segment_Send",
+		ACTION_NOP,ACTION_NOP,ACTION_NOP);
+
+		StateGuiAdd("S_Test_Segment_Send",
+		 STATE_NO_FLAGS,
+		 "",
+		 "",
+		 STATE_NOP,STATE_NOP,
+		 "S_Test_Segment_enter",ACTION_NOP,ACTION_NOP);
+
+	StateGuiAdd("S_Test_Motor_Test",
+	 STATE_NO_FLAGS,
+	 "Test...         ",
+//	 "1234567890123456",
+	 "Motor Test  Next",
+	 "S_Test_Motor_Select","S_Test_SanityTest",
+	 ACTION_NOP,ACTION_NOP,ACTION_NOP);
+
+		StateGuiAdd("S_Test_Motor_Select",
+		 STATE_FROM_CALLBACK,
+		 "Test Motor 0... ",
+	//	 "1234567890123456",
+		 "Exit        Test",
+		 "S_Main_Play","S_Test_Motor_Send",
+		 ACTION_NOP,ACTION_NOP,ACTION_NOP);
+
+		StateGuiAdd("S_Test_Motor_Send",
+		 STATE_NO_FLAGS,
+		 "",
+		 "",
+		 STATE_NOP,STATE_NOP,
+		 "S_TestMotor_enter",ACTION_NOP,ACTION_NOP);
 
 	StateGuiAdd("S_Test_SanityTest",
 	 STATE_NO_FLAGS,
