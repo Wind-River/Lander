@@ -19,17 +19,21 @@
 
 // General Enablement
 
-#define IO_BUTTON_BRINGUP	true	// init state to display I/O button values
+#define IO_BUTTON_BRINGUP			true	// init state to display I/O button values
 
-#define IO_BUTTONS_ENABLE	true	// enable the buttons to change state
-#define IO_JOYSTICK_ENABLE	true	// enable the joystick for X-Y
-#define IO_LCD_ENABLE 		true	// enable the LCD display
-#define IO_TRACKER_ENABLE	false	// enable the Pan&Tilt 'antenae' device
-#define IO_LEDRGB_ENABLE	false	// enable the LED_RGB 'antenae' device
-#define IO_XYZ_ENABLE		false	// enable the XYZ motors
-#define IO_LEDS_ENABLE		false	// enable the LED space lighting
-#define IO_SOUND_ENABLE		false	// enable the sound effects device
-#define IO_BLUETOOTH_ENABLE	false	// enable the Arduino 101 rocket piggyback device
+#define IO_BUTTONS_ENABLE			true	// enable the buttons to change state
+#define IO_JOYSTICK_ENABLE			true	// enable the joystick for X-Y
+#define IO_LCD_ENABLE 				true	// enable the LCD display
+#define IO_LED_BACKPACK_ENABLE		true	// enable the Adafruit LED i2c backback device
+#define IO_XYZ_ENABLE				true	// enable the XYZ motors
+#define IO_TRACKER_LOCAL_ENABLE		false	// enable the Pan&Tilt 'antenae' device
+
+#define IO_REMOTE_ENABLE			true	// enable the sister i2c-slave board
+											// NOTE: the connection and remote board must be up else we will hang in "setup.c"
+#define IO_TRACKER_REMOTE_ENABLE	false	// enable the Pan&Tilt 'antenae' device
+#define IO_LEDRGB_REMOTE_ENABLE		false	// enable the LED_RGB 'antenae' device
+#define IO_LEDS_REMOTE_ENABLE		false	// enable the LED space lighting
+#define IO_SOUND_REMOTE_ENABLE		false	// enable the sound effects device
 
 
 // Specific installed hardware
@@ -49,6 +53,10 @@
 #define XYZ_CONTROL_COUNT		1
 #define TRACK_CONTROL_COUNT		4
 #define POSITION_CONTROL_COUNT	1
+
+// Remote Sistem board
+
+#define SISTER_I2C_ADDRESS 18
 
 // Game Options
 
@@ -71,8 +79,9 @@
 #define GAME_START_CENTER	1
 #define GAME_START_RANDOM	2
 
-#define GAME_DISPLAY_RAW    1
-#define GAME_DISPLAY_NORMAL	2
+#define GAME_DISPLAY_RAW_XYZF  1
+#define GAME_DISPLAY_RAW_CABLE 2
+#define GAME_DISPLAY_NORMAL	   3
 
 /* LCD Data */
 #define LCD_DISPLAY_POS_MAX 16
@@ -98,8 +107,21 @@
 #define JOYSTICK_DELTA_Z_MIN  40	// no move at center value zone
 #endif
 
+/* Sound Setup */
+#define SOUND_QUIET  0
+#define SOUND_READY  1
+#define SOUND_PLAY   2
+#define SOUND_DANGER 3
+#define SOUND_LAND   4
+#define SOUND_CRASH  5
+
+
 /* ADC Setup */
 #define ADC_MAX JOYSTICK_Z_PORT+1
+
+/* Game Mode */
+#define GAME_PLAY		0
+#define GAME_SIMULATE	1
 
 // Exported Structures and Funtions
 
@@ -109,6 +131,7 @@ struct ROCKET_GAME_S {
 	int32_t	gravity_option;		// selected gravity option
 	int32_t	start_option;		// selected start option
 	int32_t	play_display_mode;	// selected play display format
+	int32_t	game_mode;			// selected play or simulate
 };
 
 struct ROCKET_CONTROL_S {
@@ -145,6 +168,16 @@ extern struct device *i2c;
 extern void log(char *message);
 extern void log_val(char *format, void *val);
 extern int32_t abs(int32_t val);
+
+void send_LED_Backpack(uint32_t x);
+
+void send_I2c_slave(uint8_t *buffer,uint8_t i2c_len);
+void sister_send_Led1(uint32_t value);
+void sister_send_Led2(uint32_t value);
+void sister_send_Pan_Tilt(uint32_t pan,uint32_t tilt);
+void sister_send_Led_Rgb(uint32_t r,uint32_t g,uint32_t b);
+void sister_send_NeoPixel(uint32_t pattern);
+void sister_send_Sound(uint32_t pattern);
 
 void init_game();
 void init_main();
