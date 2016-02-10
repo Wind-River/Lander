@@ -49,26 +49,26 @@ Todo:
 	x	Create 'Move' game for movement testing
 		x	no inertia/gravity (e./g. gantry motion model)
 		x	fast x/y/z
-	--- Demo 2 checkpoint
-	x	Game display modes
+==>	--- Demo 2 checkpoint
+	*	Game display modes
 		x	raw x,y,z,f (m units)
 		x	raw cables
-	x	Large and small state LEDs
- 		x	Vincent's I2C code for large display, I2C adapter
-		x	small LEDs
-	x	Communication with daughter Arduino
-		x	daughter I2C connection
-		x	daughter client
-==>	--- Demo 3 checkpoint
-	*	Integration with X-Y-Z motors
-	*	Implement power-up setup and calibration states
+		*	true meters
+	*	Large and small state LEDs
+>		*	Vincent's I2C code for large display, I2C adapter
+		?	small LEDs
+	*	Communication with daughter Arduino
+		*	Serial server
+		*	Serial client
 	*	Wait for rocket to move to game start position
 	*	import thrust method from sample game
-	*	Game enhancements
-		*	update large and small LEDs
-		*	display moon meters
-		*	trigger sounds
-		*	trigger neopixels
+	*	Implement power-up setup and calibration states
+	--- Demo 3 checkpoint
+	*	Arduino-101
+		*	test with slider and I2C motor control
+		*	COMM software
+		*	Cliet/Server
+	*	Integration with X-Y-Z motors
 	--- Demo 4 checkpoint
 	*	Enable Tracker Pan-Tilt
 >		*	Dual PWM Grove cable
@@ -152,7 +152,7 @@ int32_t abs(int32_t val) {
 
 /* specify which Arduino connector pin is used as input, output and LED */
 #define INPUT_A_PIN   3
-#define INPUT_B_PIN   5
+#define INPUT_B_PIN   7	// 5
 #define GREEN_LED    13  // D13 is the on-board LED
 #define JOYSTICK_A_PIN  0 /* A0 */
 #define JOYSTICK_B_PIN  1 /* A1 */
@@ -236,6 +236,9 @@ void init_hardware()
 	}
 
 	/* Init the Tracker */
+	if (IO_TRACKER_LOCAL_ENABLE) {
+		 send_Pan_Tilt(PAN_MID,TILT_MID);
+	}
 
 	/* Init the Phone/Server */
 
@@ -303,68 +306,83 @@ void send_I2c_slave(uint8_t *buffer,uint8_t i2c_len) {
 	}
 }
 
-void sister_send_Led1(uint32_t value) {
+void send_Led1(uint32_t value) {
 	uint8_t buf[10];
 	uint32_t i;
 
-	buf[0]='1';
-	for (i=4;i>0;i--) {
-		buf[i]=value % 10;
-		value /= 10;
+	if (IO_LEDS_REMOTE_ENABLE) {
+		buf[0]='1';
+		for (i=4;i>0;i--) {
+			buf[i]=value % 10;
+			value /= 10;
+		}
+		send_I2c_slave(buf,5);
 	}
-	send_I2c_slave(buf,5);
 }
 
-void sister_send_Led2(uint32_t value) {
+void send_Led2(uint32_t value) {
 	uint8_t buf[10];
 	uint32_t i;
 
-	buf[0]='2';
-	for (i=4;i>0;i--) {
-		buf[i]=value % 10;
-		value /= 10;
+	if (IO_LEDS_REMOTE_ENABLE) {
+		buf[0]='2';
+		for (i=4;i>0;i--) {
+			buf[i]=value % 10;
+			value /= 10;
+		}
+		send_I2c_slave(buf,5);
 	}
-	send_I2c_slave(buf,5);
 }
 
-void sister_send_Pan_Tilt(uint32_t pan,uint32_t tilt) {
+void send_Led_Rgb(uint32_t r,uint32_t g,uint32_t b) {
 	uint8_t buf[10];
 
-	if (IO_TRACKER_REMOTE_ENABLE) {
+	if (IO_LEDRGB_REMOTE_ENABLE) {
+		buf[0]='l';
+		buf[1]=(uint8_t) r;
+		buf[2]=(uint8_t) g;
+		buf[2]=(uint8_t) b;
+		send_I2c_slave(buf,3);
+	}
+}
+
+void send_NeoPixel(uint32_t pattern) {
+	uint8_t buf[10];
+
+	if (IO_NEO_REMOTE_ENABLE) {
+		buf[0]='n';
+		buf[1]=(uint8_t) pattern;
+		send_I2c_slave(buf,2);
+	}
+}
+
+void send_Sound(uint32_t pattern) {
+	uint8_t buf[10];
+
+	if (IO_SOUND_REMOTE_ENABLE) {
+		buf[0]='s';
+		buf[1]=(uint8_t) pattern;
+		send_I2c_slave(buf,2);
+	}
+}
+
+// pan and tilt: 0 .. 255
+void send_Pan_Tilt(uint32_t pan,uint32_t tilt) {
+	if (IO_TRACKER_LOCAL_ENABLE) {
+		uint32_t percent;
+        percent = (100 * pan)/256;
+        pwm_pin_set_duty_cycle(pwm, PWM_PAN_PORT, percent);
+        percent = (100 * tilt)/256;
+        pwm_pin_set_duty_cycle(pwm, PWM_TILT_PORT, percent);
+	} else if (IO_TRACKER_REMOTE_ENABLE) {
+		uint8_t buf[10];
+
 		buf[0]='p';
 		buf[1]=(uint8_t) pan;
 		buf[2]=(uint8_t) tilt;
 		send_I2c_slave(buf,3);
-	} else {
 	}
 }
-
-void sister_send_Led_Rgb(uint32_t r,uint32_t g,uint32_t b) {
-	uint8_t buf[10];
-
-	buf[0]='l';
-	buf[1]=(uint8_t) r;
-	buf[2]=(uint8_t) g;
-	buf[2]=(uint8_t) b;
-	send_I2c_slave(buf,3);
-}
-
-void sister_send_NeoPixel(uint32_t pattern) {
-	uint8_t buf[10];
-
-	buf[0]='n';
-	buf[1]=(uint8_t) pattern;
-	send_I2c_slave(buf,2);
-}
-
-void sister_send_Sound(uint32_t pattern) {
-	uint8_t buf[10];
-
-	buf[0]='s';
-	buf[1]=(uint8_t) pattern;
-	send_I2c_slave(buf,2);
-}
-
 
 /*
  * init_game : initialize variables for a new game
