@@ -81,8 +81,8 @@ static struct pin_config mux_config[NUM_IO_PINS_USED] = {
     { 2,  PINMUX_FUNC_C }, /* GPIO5 (out), GPIO5 (in), UART1_RXD, NA */
     { 3,  PINMUX_FUNC_B }, /* GPIO6 (out), GPIO6 (in), UART1_TXD, PWM.LED1 */
     { 4,  PINMUX_FUNC_B }, /* GPIO_SUS4 (out), GPIO_SUS4 (in), NA, NA */
-    { 5,  PINMUX_FUNC_B }, /* GPIO8 (out), GPIO8 (in), PWM.LED3, NA */
-    { 6,  PINMUX_FUNC_B }, /* GPIO9 (out), GPIO9 (in), PWM.LED5, NA */
+    { 5,  PINMUX_FUNC_C }, /* GPIO8 (out), GPIO8 (in), PWM.LED3, NA */
+    { 6,  PINMUX_FUNC_C }, /* GPIO9 (out), GPIO9 (in), PWM.LED5, NA */
     { 7,  PINMUX_FUNC_B }, /* EXP1.P0_6 (out), EXP1.P0_6 (in), NA, NA */
     { 8,  PINMUX_FUNC_B }, /* EXP1.P1_0 (out), EXP1.P1_0 (in), NA, NA */
     { 9,  PINMUX_FUNC_B }, /* GPIO_SUS2 (out), GPIO_SUS2 (in), PWM.LED7, NA */
