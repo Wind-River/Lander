@@ -22,6 +22,7 @@
 #include "groveLCDUtils.h"
 #include "Adafruit_LEDBackpack.h"
 #include "grove_i2c_motor.h"
+#include "groveLCD.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -335,12 +336,17 @@ static void S_IO_STATE_loop () {
 	if (self_test) return;
 
 	// display the raw I/O input controls for board bringup
-	sprintf(buffer,"[I/O] X=%3d Y=%3d Z=%3d A=%d B=%d\n",
+	sprintf(buffer,"[I/O] X=%3d Y=%3d Z=%3d A=%d B=%d | D4=%d, D5=%d, D6=%d, D7=%d, D8=%d\n",
 		r_control.analog_x,
 		r_control.analog_y,
 		r_control.analog_z,
 		r_control.button_a,
-		r_control.button_b
+		r_control.button_b,
+		gpioInputGet(4),
+		gpioInputGet(5),
+		gpioInputGet(6),
+		gpioInputGet(7),
+		gpioInputGet(8)
 		);
 	log(buffer);
 }
@@ -362,12 +368,12 @@ static void S_Test_I2C_enter () {
 
 	x++;
 
-	sister_send_Led1(1234+x);
-	sister_send_Led2(42+x);
-	sister_send_Pan_Tilt(25,57);
-	sister_send_Led_Rgb(50,100,200);
-	sister_send_NeoPixel(8);
-	sister_send_Sound(9);
+	send_Led1(1234+x);
+	send_Led2(42+x);
+	send_Pan_Tilt(25,57);
+	send_Led_Rgb(50,100,200);
+	send_NeoPixel(8);
+	send_Sound(9);
 
 
 	jump_state("S_Test_I2C_Select");
@@ -569,8 +575,8 @@ static void S_Test_Simulation_Steps_loop () {
 
 
 static int32_t antennae_number=0;
-static int32_t antennae_pan=128;
-static int32_t antennae_tilt=128;
+static int32_t antennae_pan=(PAN_MID)*4;
+static int32_t antennae_tilt=(PAN_MID)*4;
 static void S_Test_Antennae_Select_enter () {
 	antennae_number=0;
 	jump_state("S_Test_Antennae");
@@ -592,10 +598,11 @@ static void S_Test_Antennae_loop () {
 
 	// pass Z to current motor's speed
 	if (4 < abs(value_z_prev-r_control.analog_z)) {
-		sprintf(buffer,"Pan=%0x,Tilt=%0x, Z=%04d\n",
+		sprintf(buffer,"[%c] Pan=%0x,Tilt=%0x, Z=%04d\n",
+			(0 == antennae_number) ? 'P':'T',
 			antennae_pan,antennae_tilt,r_control.analog_z);
 		log(buffer);
-		sister_send_Pan_Tilt(antennae_pan,antennae_tilt);
+		send_Pan_Tilt(antennae_pan,antennae_tilt);
 		value_z_prev = r_control.analog_z;
 	}
 }
