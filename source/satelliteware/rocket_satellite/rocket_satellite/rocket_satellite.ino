@@ -4,6 +4,7 @@
 #include "TM1637.h"
 
 // General Enbles
+#define ENABLE_I2C      1
 #define ENABLE_LED1     1   // setup will hang if device is not connected/working
 #define ENABLE_LED2     1   // setup will hang if device is not connected/working
 #define ENABLE_PAN_TILT 1
@@ -40,6 +41,8 @@ TM1637 tm1637_2(LED2_CLK,LED2_DIO);
 // LED-RGB
 #define LED_RGB_PORT  12
 
+void set_pan_tilt(byte pan,byte tilt);
+
 void setup() {
 
   Serial.begin(9600);           // start serial for output
@@ -57,22 +60,41 @@ void setup() {
     tm1637_2.init();
     tm1637_2.set(BRIGHT_TYPICAL);//BRIGHT_TYPICAL = 2,BRIGHT_DARKEST = 0,BRIGHTEST = 7;
   }
-  
-  Serial.println("Init I2C");
-  Wire.begin(SATELLITE_I2C_ADDRESS);                // Set I2C slave address
-  Wire.onReceive(receiveEvent); // register the I2C receive event
+
+  if (ENABLE_PAN_TILT) {
+    set_pan_tilt(128,128);
+  }
+
+  if (ENABLE_I2C) {
+    Serial.println("Init I2C");
+    Wire.begin(SATELLITE_I2C_ADDRESS); // Set I2C slave address
+    Wire.onReceive(receiveEvent); // register the I2C receive event
+  }
+
 
   Serial.println("Setup Done!");
 }
 
-int loop_count=0;
+void display_debug();
 
+int loop_count=0;
+int ping_count=0;
 void loop() {
   delay(100);
 
+  if (Serial.available()) {
+    char char_out=char(Serial.read());
+ 
+    if ('d' == char_out) {
+      display_debug();
+    }
+  }
+ 
   if (++loop_count>=30) {
     loop_count=0;
-    Serial.println("ping");
+    Serial.print("ping:");
+    Serial.println(ping_count);
+    ping_count++;
   }
 }
 
@@ -179,3 +201,31 @@ void receiveEvent(int howMany) {
     }
   }
 }
+
+void display_debug() {
+  static int led1=1234;
+  static int led2=765;
+  static int pan=1;
+  static int sound=0;
+
+  Serial.println("Debug features:");
+
+
+  set_led1((led1/1000) % 10,(led1/100) % 10,(led1/10) % 10,led1 % 10);
+  led1++;
+
+  set_led2((led2/1000) % 10,(led2/100) % 10,(led2/10) % 10,led2 % 10);
+  led2++;
+
+  if (0 == pan) {
+    set_pan_tilt(40,60);
+    pan = 1;
+  } else {
+    set_pan_tilt(60,40);
+    pan = 0;
+  }      
+ 
+  set_sound(sound);
+  sound = (sound + 1) & 0x07;
+}
+
