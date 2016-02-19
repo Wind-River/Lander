@@ -21,7 +21,6 @@
 #include <i2c.h>
 #include "groveLCDUtils.h"
 #include "Adafruit_LEDBackpack.h"
-#include "grove_i2c_motor.h"
 #include "groveLCD.h"
 
 #include <string.h>
@@ -188,8 +187,46 @@ void jump_state(char *select_state_name) {
  *
  */
 
+static void updateLedDisplays () {
+	// show fuel
+	send_LED_Backpack(r_space.rocket_fuel);
+	// show height
+	send_Led1(r_space.rocket_z/SCALE_GAME_UMETER_TO_MOON_METER);
+	// show speed
+	if (GAME_XYZ_MOVE != r_game.game) {
+		send_Led2((r_space.rocket_delta_x+r_space.rocket_delta_y+r_space.rocket_delta_z)/SCALE_GAME_UMETER_TO_MOON_METER);
+	} else {
+		int32_t psuedo_speed=0;
+		if (JOYSTICK_DELTA_XY_MIN < abs(r_space.thrust_x))
+			psuedo_speed += abs(r_space.thrust_x) - JOYSTICK_DELTA_XY_MIN;
+		if (JOYSTICK_DELTA_XY_MIN < abs(r_space.thrust_y))
+			psuedo_speed += abs(r_space.thrust_y) - JOYSTICK_DELTA_XY_MIN;
+		if (JOYSTICK_DELTA_Z_MIN < abs(r_space.thrust_z))
+			psuedo_speed += abs(r_space.thrust_z) - JOYSTICK_DELTA_Z_MIN;
+		if (999 < psuedo_speed) psuedo_speed = 999;
+		send_Led2(psuedo_speed);
+	}
+}
+
+
+static void S_Main_Play_enter () {
+	send_Sound(SOUND_READY);
+	send_NeoPixel(NEOPIXEL_READY);
+}
+
 static void S_Game_Start_enter () {
 	init_game ();
+
+	// start the show
+	if (SAFE_UMETER_PER_SECOND < abs(r_space.rocket_delta_z)) {
+		send_Sound(SOUND_DANGER);
+		send_NeoPixel(NEOPIXEL_DANGER);
+	} else {
+		send_Sound(SOUND_PLAY);
+		send_NeoPixel(NEOPIXEL_PLAY);
+	}
+	updateLedDisplays();
+
 	jump_state("S_Game_Play");
 }
 
@@ -242,6 +279,9 @@ static void S_Game_Play_loop () {
 		set_lcd_display(1,buffer);
 		display_state();
 	}
+
+	// update the displays
+	updateLedDisplays();
 }
 
 static void S_Game_Done_enter () {
@@ -250,8 +290,14 @@ static void S_Game_Done_enter () {
 
 	if (SAFE_UMETER_PER_SECOND < abs(r_space.rocket_delta_z)) {
 		sprintf(buffer,"CRASH :-( S=%04d",abs(r_space.rocket_delta_z));
+		// stop the show
+		send_Sound(SOUND_CRASH);
+		send_NeoPixel(NEOPIXEL_CRASH);
 	} else {
 		sprintf(buffer,"WIN! :-) S=%04d",abs(r_space.rocket_delta_z));
+		// stop the show
+		send_Sound(SOUND_LAND);
+		send_NeoPixel(NEOPIXEL_LAND);
 	}
 	set_lcd_display(0,buffer);
 }
@@ -330,6 +376,15 @@ static void S_Opt_Pos_Random_Enter () {
 	jump_state("S_Main_Play");
 }
 
+
+static void S_Test_enter () {
+	// self-test mode?
+	if (self_test) return;
+
+	// stop current sound and Neo
+	send_Sound(SOUND_QUIET);
+	send_NeoPixel(NEOPIXEL_QUIET);
+}
 
 static void S_IO_STATE_loop () {
 	// self-test mode?
@@ -413,8 +468,8 @@ static void S_TestMotor_enter () {
 	// self-test mode?
 	if (self_test) return;
 
-	if (IO_XYZ_ENABLE) {
-		stepper_unit_test(test_motor_number);
+	if (IO_MOTOR_ENABLE) {
+		// TODO ###############
 	}
 	jump_state("S_Test_Segment_Select");
 }
@@ -670,6 +725,44 @@ static void S_Test_Tower_Next_enter () {
 	jump_state("S_Test_Tower");
 }
 
+static int32_t sound_number=0;
+static void S_Test_Sound_Select_enter () {
+	sound_number=0;
+	jump_state("S_Test_Sound");
+}
+static void S_Test_Sound_enter () {
+	// self-test mode?
+	if (self_test) return;
+
+	// initialize current sound and Neo
+	send_Sound(sound_number);
+	send_NeoPixel(sound_number);
+}
+static void S_Test_Sound_loop () {
+	// self-test mode?
+	if (self_test) return;
+
+	// pass Z to current motor's speed
+	sprintf(buffer,"[Sound & Neo %d] Play\n",sound_number);
+	log(buffer);
+	send_Sound(sound_number);
+	send_NeoPixel(sound_number);
+}
+static void S_Test_Sound_exit () {
+	// self-test mode?
+	if (self_test) return;
+
+	// stop current sound and Neo
+	send_Sound(SOUND_QUIET);
+	send_NeoPixel(NEOPIXEL_QUIET);
+}
+static void S_Test_Sound_Next_enter () {
+	sound_number++;
+	if (sound_number>SOUND_MAX)
+		sound_number=0;
+	jump_state("S_Test_Sound");
+}
+
 void cable_calc_test(char *msg, int32_t x, int32_t y) {
 	int32_t i;
 
@@ -828,6 +921,10 @@ static void S_Test_Sanity_enter () {
 void state_callback(char *call_name) {
 	if      (ACTION_NOP == call_name)
 		return;
+
+	else if (0 == strcmp("S_Main_Play_enter",call_name))
+		S_Main_Play_enter();
+
 	else if (0 == strcmp("S_Game_Start_enter",call_name))
 		S_Game_Start_enter();
 	else if (0 == strcmp("S_Game_Play_loop",call_name))
@@ -882,6 +979,9 @@ void state_callback(char *call_name) {
 
 	else if (0 == strcmp("S_IO_STATE_loop",call_name))
 		S_IO_STATE_loop();
+	else if (0 == strcmp("S_Test_enter",call_name))
+		S_Test_enter();
+
 	else if (0 == strcmp("S_Test_Simulation_Meters_enter",call_name))
 		S_Test_Simulation_Meters_enter();
 	else if (0 == strcmp("S_Test_Simulation_MicroMeters_loop",call_name))
@@ -933,6 +1033,17 @@ void state_callback(char *call_name) {
 	else if (0 == strcmp("S_Test_Tower_Next_enter",call_name))
 		S_Test_Tower_Next_enter();
 
+	else if (0 == strcmp("S_Test_Sound_Select_enter",call_name))
+		S_Test_Sound_Select_enter();
+	else if (0 == strcmp("S_Test_Sound_enter",call_name))
+		S_Test_Sound_enter();
+	else if (0 == strcmp("S_Test_Sound_loop",call_name))
+		S_Test_Sound_loop();
+	else if (0 == strcmp("S_Test_Sound_exit",call_name))
+		S_Test_Sound_exit();
+	else if (0 == strcmp("S_Test_Sound_Next_enter",call_name))
+		S_Test_Sound_Next_enter();
+
 	else log_val("ERROR: MISSING_CALLBACK=%s\n",call_name);
 
 }
@@ -959,7 +1070,7 @@ void init_state () {
 //	 "1234567890123456",
 	 "I/O Inputs   Run",
 	 "S_IO_STATE","S_Main_Play",
-	 ACTION_NOP,ACTION_NOP,ACTION_NOP);
+	 "S_Main_Play_enter",ACTION_NOP,ACTION_NOP);
 
 // Top Menus
 
@@ -1302,7 +1413,7 @@ void init_state () {
 //	 "1234567890123456",
 	 "I/O_Values  Next",
 	 "S_IO_STATE","S_Test_I2cSlaveTest",
-	 ACTION_NOP,ACTION_NOP,ACTION_NOP);
+	 "S_Test_enter",ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_IO_STATE",
 		 STATE_NO_VERBOSE,
@@ -1524,7 +1635,7 @@ void init_state () {
 	 "Test...",
 //	 "1234567890123456",
 	 "Tower_Motor Next",
-	 "S_Test_Tower_Select","S_Test_Back",
+	 "S_Test_Tower_Select","S_Test_Sound_test",
 	 ACTION_NOP,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Test_Tower_Select",
@@ -1548,6 +1659,36 @@ void init_state () {
 		 "",
 		 STATE_NOP,STATE_NOP,
 		 "S_Test_Tower_Next_enter",ACTION_NOP,ACTION_NOP);
+
+	StateGuiAdd("S_Test_Sound_test",
+	 STATE_NO_FLAGS,
+	 "Test...",
+//	 "1234567890123456",
+	 "Sound/Neo   Next",
+	 "S_Test_Sound_Select","S_Test_Back",
+	 ACTION_NOP,ACTION_NOP,ACTION_NOP);
+
+		StateGuiAdd("S_Test_Sound_Select",
+		 STATE_NO_FLAGS,
+		 "",
+		 "",
+		 STATE_NOP,STATE_NOP,
+		 "S_Test_Sound_Select_enter",ACTION_NOP,ACTION_NOP);
+
+		StateGuiAdd("S_Test_Sound",
+		 STATE_FROM_CALLBACK,
+	 	 "Test Sound&Neo  ",
+	//	 "1234567890123456",
+		 "Exit  Next_Motor",
+		 "S_Test","S_Test_Sound_Next",
+		 "S_Test_Sound_enter","S_Test_Sound_loop","S_Test_Sound_exit");
+
+		StateGuiAdd("S_Test_Sound_Next",
+		 STATE_NO_FLAGS,
+		 "",
+		 "",
+		 STATE_NOP,STATE_NOP,
+		 "S_Test_Sound_Next_enter",ACTION_NOP,ACTION_NOP);
 
 	StateGuiAdd("S_Test_Back",
 	 STATE_NO_FLAGS,
