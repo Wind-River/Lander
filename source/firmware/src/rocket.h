@@ -25,16 +25,16 @@
 #define IO_JOYSTICK_ENABLE			true	// enable the joystick for X-Y
 #define IO_LCD_ENABLE 				true	// enable the LCD display
 #define IO_LED_BACKPACK_ENABLE		true	// enable the Adafruit LED i2c backback device
-#define IO_XYZ_ENABLE				true	// enable the XYZ motors
 #define IO_TRACKER_LOCAL_ENABLE		true	// enable the Pan&Tilt 'antenae' device
+#define IO_MOTOR_ENABLE				false	// enable the motors
 
 #define IO_REMOTE_ENABLE			true	// enable the sister i2c-slave board
 											// NOTE: the connection and remote board must be up else we will hang in "setup.c"
-#define IO_TRACKER_REMOTE_ENABLE	false	// enable the Pan&Tilt 'antenae' device
-#define IO_LEDRGB_REMOTE_ENABLE		false	// enable the LED_RGB 'antenae' device
 #define IO_LEDS_REMOTE_ENABLE		true	// enable the LED space lighting
 #define IO_NEO_REMOTE_ENABLE		true	// enable the NeoPixels space lighting
 #define IO_SOUND_REMOTE_ENABLE		true	// enable the sound effects device
+#define IO_TRACKER_REMOTE_ENABLE	false	// enable the Pan&Tilt 'antenae' device
+#define IO_LEDRGB_REMOTE_ENABLE		false	// enable the LED_RGB 'antenae' device
 
 
 // Specific installed hardware
@@ -84,6 +84,13 @@
 #define GAME_DISPLAY_RAW_CABLE 2
 #define GAME_DISPLAY_NORMAL	   3
 
+/* specify which Arduino connector pin is used as input, output and LED */
+#define INPUT_A_PIN   3
+#define INPUT_B_PIN   7	// 5
+#define GREEN_LED    13  // D13 is the on-board LED
+#define JOYSTICK_A_PIN  0 /* A0 */
+#define JOYSTICK_B_PIN  1 /* A1 */
+
 /* LCD Data */
 #define LCD_DISPLAY_POS_MAX 16
 
@@ -115,14 +122,26 @@
 #define SOUND_DANGER 3
 #define SOUND_LAND   4
 #define SOUND_CRASH  5
+#define SOUND_MAX    6
+
+/* NeoPixel Setup */
+#define NEOPIXEL_QUIET  0
+#define NEOPIXEL_READY  1
+#define NEOPIXEL_PLAY   2
+#define NEOPIXEL_DANGER 3
+#define NEOPIXEL_LAND   4
+#define NEOPIXEL_CRASH  5
+#define NEOPIXEL_MAX    6
 
 
 /* ADC Setup */
 #define ADC_MAX JOYSTICK_Z_PORT+1
 
 /* Pan and Tilt Setup (if local) */
-#define PWM_PAN_PORT   3	// IO5 => PWM pin 3: requires setup.c port 5=PINMUX_FUNC_C
-#define PWM_TILT_PORT  5	// IO6 => PWM pin 5: requires setup.c port 6=PINMUX_FUNC_C
+#define PWM_PAN_PORT   	5	// WARNING: IO5 => PWM pin 3: requires setup.c port 5=PINMUX_FUNC_C
+#define PWM_TILT_PORT  	6	// WARNING: IO6 => PWM pin 5: requires setup.c port 6=PINMUX_FUNC_C
+#define PWM_PAN_PWM		3	// WARNING: IO5 => PWM pin 3: requires setup.c port 5=PINMUX_FUNC_C
+#define PWM_TILT_PWM	5	// WARNING: IO6 => PWM pin 5: requires setup.c port 6=PINMUX_FUNC_C
 #define PAN_P90		(165/4)
 #define PAN_M90		(518/4)
 #define PAN_MID		((PAN_P90+PAN_M90)/2)
