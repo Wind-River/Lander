@@ -150,12 +150,6 @@ int32_t abs(int32_t val) {
  *
  */
 
-/* specify which Arduino connector pin is used as input, output and LED */
-#define INPUT_A_PIN   3
-#define INPUT_B_PIN   7	// 5
-#define GREEN_LED    13  // D13 is the on-board LED
-#define JOYSTICK_A_PIN  0 /* A0 */
-#define JOYSTICK_B_PIN  1 /* A1 */
 
 struct device *i2c;
 
@@ -307,8 +301,13 @@ void send_I2c_slave(uint8_t *buffer,uint8_t i2c_len) {
 }
 
 void send_Led1(uint32_t value) {
+	static uint32_t value_prev = 9999;
+
 	uint8_t buf[10];
 	uint32_t i;
+
+	if (value_prev == value) return;
+	value_prev = value;
 
 	if (IO_LEDS_REMOTE_ENABLE) {
 		buf[0]='1';
@@ -321,8 +320,12 @@ void send_Led1(uint32_t value) {
 }
 
 void send_Led2(uint32_t value) {
+	static uint32_t value_prev = 9999;
 	uint8_t buf[10];
 	uint32_t i;
+
+	if (value_prev == value) return;
+	value_prev = value;
 
 	if (IO_LEDS_REMOTE_ENABLE) {
 		buf[0]='2';
@@ -335,7 +338,15 @@ void send_Led2(uint32_t value) {
 }
 
 void send_Led_Rgb(uint32_t r,uint32_t g,uint32_t b) {
+	static uint32_t r_prev = 9999;
+	static uint32_t g_prev = 9999;
+	static uint32_t b_prev = 9999;
 	uint8_t buf[10];
+
+	if ((r_prev == r) && (g_prev == g) && (b_prev == b)) return;
+	r_prev = r;
+	g_prev = g;
+	b_prev = b;
 
 	if (IO_LEDRGB_REMOTE_ENABLE) {
 		buf[0]='l';
@@ -346,34 +357,50 @@ void send_Led_Rgb(uint32_t r,uint32_t g,uint32_t b) {
 	}
 }
 
-void send_NeoPixel(uint32_t pattern) {
+void send_NeoPixel(uint32_t value) {
+	static uint32_t value_prev = 9999;
 	uint8_t buf[10];
+
+	if (value_prev == value) return;
+	value_prev = value;
 
 	if (IO_NEO_REMOTE_ENABLE) {
 		buf[0]='n';
-		buf[1]=(uint8_t) pattern;
+		buf[1]=(uint8_t) value;
 		send_I2c_slave(buf,2);
 	}
 }
 
-void send_Sound(uint32_t pattern) {
+void send_Sound(uint32_t value) {
+	static uint32_t value_prev = 9999;
 	uint8_t buf[10];
 
+	if (value_prev == value) return;
+	value_prev = value;
+
 	if (IO_SOUND_REMOTE_ENABLE) {
+		PRINT("** Sound: %d ***",value);
 		buf[0]='s';
-		buf[1]=(uint8_t) pattern;
+		buf[1]=(uint8_t) value;
 		send_I2c_slave(buf,2);
 	}
 }
 
 // pan and tilt: 0 .. 255
 void send_Pan_Tilt(uint32_t pan,uint32_t tilt) {
+	static uint32_t pan_prev = 9999;
+	static uint32_t tilt_prev = 9999;
+
+	if ((pan_prev == pan) && (tilt_prev == tilt)) return;
+	pan_prev = pan;
+	tilt_prev = tilt;
+
 	if (IO_TRACKER_LOCAL_ENABLE) {
 		uint32_t percent;
         percent = (100 * pan)/256;
-        pwm_pin_set_duty_cycle(pwm, PWM_PAN_PORT, percent);
+        pwm_pin_set_duty_cycle(pwm, PWM_PAN_PWM, percent);
         percent = (100 * tilt)/256;
-        pwm_pin_set_duty_cycle(pwm, PWM_TILT_PORT, percent);
+        pwm_pin_set_duty_cycle(pwm, PWM_TILT_PWM, percent);
 	} else if (IO_TRACKER_REMOTE_ENABLE) {
 		uint8_t buf[10];
 
@@ -448,6 +475,7 @@ void init_game () {
  * init_main - initialize top-level game variables
  *
  */
+
 void init_main()
 	{
     // Preset the game defaults
@@ -476,6 +504,7 @@ void init_main()
  * main - LCD demo
  *
  */
+
 void main()
     {
     bool flag = false;
