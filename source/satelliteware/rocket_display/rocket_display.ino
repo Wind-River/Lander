@@ -188,7 +188,8 @@ void write_sound() {
 // Setup()
 //
 
-boolean verbose = 2;  // verbose level: 0=off, 1=ping, 2=I2C, 3=LED fails
+#define VERBOSE_MAX 3
+uint8_t verbose = 2;  // verbose level: 0=off, 1=ping, 2=I2C, 3=LED fails
 
 void setup() {
 
@@ -297,7 +298,7 @@ void loop() {
     }
 
     if ('v' == char_out) {
-      if (++verbose > 2) verbose=0;
+      if (++verbose > VERBOSE_MAX) verbose=0;
       Serial.print("** Verbose = ");
       Serial.println(verbose);
     }
@@ -460,5 +461,4 @@ void display_debug() {
   ave_loop.displayResults("loop",true);
   if (ENABLE_TIMING) ave_i2c.displayResults("i2c",true);
 }
-
 
