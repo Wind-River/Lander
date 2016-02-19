@@ -24,6 +24,37 @@ static int8_t TubeTab[] = {0x3f,0x06,0x5b,0x4f,
                            0x66,0x6d,0x7d,0x07,
                            0x7f,0x6f,0x77,0x7c,
                            0x39,0x5e,0x79,0x71};//0~9,A,b,C,d,E,F
+
+static int8_t AsciiTab[] = {
+	0x77, // a
+	0x7c, // b
+	0x39, // b
+	0x5e, // d
+	0x79, // e
+	0x71, // f
+	0x6f, // g
+	0x76, // h
+	0x06, // i
+	0x0c, // j
+	0x40, // k
+	0x30, // l
+	0x40, // m
+	0x54, // n
+	0x5c, // o
+	0x73, // p
+	0x67, // q
+	0x50, // r
+	0x6d, // s
+	0x07, // t
+	0x1c, // u
+	0x40, // v
+	0x40, // w
+	0x40, // x
+	0x66, // y
+	0x40  // z
+};
+
+
 TM1637::TM1637(uint8_t Clk, uint8_t Data)
 {
   Clkpin = Clk;
@@ -39,7 +70,7 @@ void TM1637::init(void)
 
 void TM1637::writeByte(int8_t wr_data)
 {
-  uint8_t i,count1,count2;
+  uint8_t i,count1;
   for(i=0;i<8;i++)        //sent 8bit data
   {
     digitalWrite(Clkpin,LOW);
@@ -53,21 +84,36 @@ void TM1637::writeByte(int8_t wr_data)
   digitalWrite(Datapin,HIGH);
   digitalWrite(Clkpin,HIGH);
   pinMode(Datapin,INPUT);
-  while(digitalRead(Datapin) && (count2 < 10000))
+  count1=0;
+  //Serial.print("0");
+  while(digitalRead(Datapin))
   {
     count1 +=1;
-    count2 +=1;
-    if(count1 == 200)//
+
+    if(count1 == 50)
     {
-     pinMode(Datapin,OUTPUT);
-     digitalWrite(Datapin,LOW);
-     count1 =0;
+      pinMode(Datapin,OUTPUT);
+      digitalWrite(Datapin,LOW);
     }
     pinMode(Datapin,INPUT);
+
+	// failover timeout
+    if(count1 == 100)
+    {
+      ackFailCnt++;
+	  break;
+    }
   }
+  //Serial.println("2");
   pinMode(Datapin,OUTPUT);
 
+  if (0 < count1) {
+//     Serial.print("=== BAR:");
+//     Serial.println(count1);
+  }
+
 }
+
 //send start signal to TM1637
 void TM1637::start(void)
 {
@@ -84,6 +130,7 @@ void TM1637::stop(void)
   digitalWrite(Clkpin,HIGH);
   digitalWrite(Datapin,HIGH);
 }
+
 //display function.Write to full-screen.
 void TM1637::display(int8_t DispData[])
 {
@@ -108,6 +155,32 @@ void TM1637::display(int8_t DispData[])
   writeByte(Cmd_DispCtrl);//
   stop();           //
 }
+
+//display function.Write to full-screen.
+void TM1637::display(char *DispData)
+{
+  int8_t SegData[4];
+  uint8_t i;
+  for(i = 0;i < 4;i ++)
+  {
+    SegData[i] = (int8_t) DispData[i];
+  }
+  coding(SegData);
+  start();          //start signal sent to TM1637 from MCU
+  writeByte(ADDR_AUTO);//
+  stop();           //
+  start();          //
+  writeByte(Cmd_SetAddr);//
+  for(i=0;i < 4;i ++)
+  {
+    writeByte(SegData[i]);        //
+  }
+  stop();           //
+  start();          //
+  writeByte(Cmd_DispCtrl);//
+  stop();           //
+}
+
 //******************************************
 void TM1637::display(uint8_t BitAddr,int8_t DispData)
 {
@@ -132,6 +205,7 @@ void TM1637::clearDisplay(void)
   display(0x02,0x7f);
   display(0x03,0x7f);
 }
+
 //To take effect the next time it displays.
 void TM1637::set(uint8_t brightness,uint8_t SetData,uint8_t SetAddr)
 {
@@ -146,23 +220,27 @@ void TM1637::point(boolean PointFlag)
 {
   _PointFlag = PointFlag;
 }
+
 void TM1637::coding(int8_t DispData[])
 {
-  uint8_t PointData;
-  if(_PointFlag == POINT_ON)PointData = 0x80;
-  else PointData = 0;
   for(uint8_t i = 0;i < 4;i ++)
-  {
-    if(DispData[i] == 0x7f)DispData[i] = 0x00;
-    else DispData[i] = TubeTab[DispData[i]] + PointData;
-  }
+    DispData[i] = coding(DispData[i]);
 }
+
 int8_t TM1637::coding(int8_t DispData)
 {
   uint8_t PointData;
-  if(_PointFlag == POINT_ON)PointData = 0x80;
+  if(_PointFlag == POINT_ON) PointData = 0x80;
   else PointData = 0;
-  if(DispData == 0x7f) DispData = 0x00 + PointData;//The bit digital tube off
-  else DispData = TubeTab[DispData] + PointData;
+
+  if      (DispData == 0x7f)
+  	DispData = 0x00 + PointData;//The bit digital tube off
+  else if (DispData == 0x20)
+  	DispData = 0x00 + PointData;//space char
+  else if ((DispData >= 0x61) && (DispData < 0x7a))
+  	DispData = AsciiTab[DispData-0x61] | PointData;
+  else
+  	DispData = TubeTab[DispData] | PointData;
+
   return DispData;
 }
