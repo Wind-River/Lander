@@ -461,19 +461,6 @@ static void S_Test_Segment_enter () {
 	jump_state("S_Test_Segment_Select");
 }
 
-/* Grove i2c motor controler test */
-
-static int test_motor_number=0;
-static void S_TestMotor_enter () {
-	// self-test mode?
-	if (self_test) return;
-
-	if (IO_MOTOR_ENABLE) {
-		// TODO ###############
-	}
-	jump_state("S_Test_Segment_Select");
-}
-
 
 /* Simulation support */
 static int32_t title_loop=0;
@@ -763,6 +750,27 @@ static void S_Test_Sound_Next_enter () {
 	jump_state("S_Test_Sound");
 }
 
+static void S_TestMotor_PlusStep_enter () {
+	rocket_increment_send (1, 1, 1, 1);
+	jump_state("S_TestMotor_PlusStep");
+}
+
+static void S_TestMotor_MinusStep_enter () {
+	rocket_increment_send (-1, -1, -1, -1);
+	jump_state("S_TestMotor_MinusStep");
+}
+
+static void S_TestMotor_Plus360_enter () {
+	rocket_increment_send (200, 200, 200, 200);
+	jump_state("S_TestMotor_Plus360");
+}
+
+static void S_TestMotor_Minus360_enter () {
+	rocket_increment_send (-200, -200, -200, -200);
+	jump_state("S_TestMotor_Minus360");
+}
+
+
 void cable_calc_test(char *msg, int32_t x, int32_t y) {
 	int32_t i;
 
@@ -974,9 +982,6 @@ void state_callback(char *call_name) {
 	else if (0 == strcmp("S_Test_Segment_enter",call_name))
 		S_Test_Segment_enter();
 
-	else if (0 == strcmp("S_TestMotor_enter",call_name))
-		S_TestMotor_enter();
-
 	else if (0 == strcmp("S_IO_STATE_loop",call_name))
 		S_IO_STATE_loop();
 	else if (0 == strcmp("S_Test_enter",call_name))
@@ -1021,6 +1026,15 @@ void state_callback(char *call_name) {
 		S_Test_LedRgb_loop();
 	else if (0 == strcmp("S_Test_LedRgb_exit",call_name))
 		S_Test_LedRgb_exit();
+
+	else if (0 == strcmp("S_TestMotor_PlusStep_enter",call_name))
+		S_TestMotor_PlusStep_enter();
+	else if (0 == strcmp("S_TestMotor_MinusStep_enter",call_name))
+		S_TestMotor_MinusStep_enter();
+	else if (0 == strcmp("S_TestMotor_Plus360_enter",call_name))
+		S_TestMotor_Plus360_enter();
+	else if (0 == strcmp("S_TestMotor_Minus360_enter",call_name))
+		S_TestMotor_Minus360_enter();
 
 	else if (0 == strcmp("S_Test_Tower_Select_enter",call_name))
 		S_Test_Tower_Select_enter();
@@ -1479,24 +1493,69 @@ void init_state () {
 	 STATE_NO_FLAGS,
 	 "Test...         ",
 //	 "1234567890123456",
-	 "Motor Test  Next",
-	 "S_Test_Motor_Select","S_Test_SanityTest",
+	 "Motor_Test  Next",
+	 "S_TestMotor_PlusStep","S_Test_SanityTest",
 	 ACTION_NOP,ACTION_NOP,ACTION_NOP);
 
-		StateGuiAdd("S_Test_Motor_Select",
+		StateGuiAdd("S_TestMotor_PlusStep",
 		 STATE_FROM_CALLBACK,
-		 "Test Motor 0... ",
+		 "Test Motor  +step",
 	//	 "1234567890123456",
-		 "Exit        Test",
-		 "S_Main_Play","S_Test_Motor_Send",
+		 "Next        +step",
+		 "S_TestMotor_MinusStep","S_TestMotor_PlusStep_Go",
 		 ACTION_NOP,ACTION_NOP,ACTION_NOP);
 
-		StateGuiAdd("S_Test_Motor_Send",
+		StateGuiAdd("S_TestMotor_PlusStep_Go",
 		 STATE_NO_FLAGS,
 		 "",
 		 "",
 		 STATE_NOP,STATE_NOP,
-		 "S_TestMotor_enter",ACTION_NOP,ACTION_NOP);
+		 "S_TestMotor_PlusStep_enter",ACTION_NOP,ACTION_NOP);
+
+		StateGuiAdd("S_TestMotor_MinusStep",
+		 STATE_FROM_CALLBACK,
+		 "Test Motor  -step",
+	//	 "1234567890123456",
+		 "Next        -step",
+		 "S_TestMotor_Plus360","S_TestMotor_MinusStep_Go",
+		 ACTION_NOP,ACTION_NOP,ACTION_NOP);
+
+		StateGuiAdd("S_TestMotor_MinusStep_Go",
+		 STATE_NO_FLAGS,
+		 "",
+		 "",
+		 STATE_NOP,STATE_NOP,
+		 "S_TestMotor_MinusStep_enter",ACTION_NOP,ACTION_NOP);
+
+		StateGuiAdd("S_TestMotor_Plus360",
+		 STATE_FROM_CALLBACK,
+		 "Test Motor   +360",
+	//	 "1234567890123456",
+		 "Next         +360",
+		 "S_TestMotor_Minus360","S_TestMotor_Plus360_Go",
+		 ACTION_NOP,ACTION_NOP,ACTION_NOP);
+
+		StateGuiAdd("S_TestMotor_Plus360_Go",
+		 STATE_NO_FLAGS,
+		 "",
+		 "",
+		 STATE_NOP,STATE_NOP,
+		 "S_TestMotor_Plus360_enter",ACTION_NOP,ACTION_NOP);
+
+		StateGuiAdd("S_TestMotor_Minus360",
+		 STATE_FROM_CALLBACK,
+		 "Test Motor   -360",
+	//	 "1234567890123456",
+		 "Next         -360",
+		 "S_Main_Play","S_TestMotor_Minus360_Go",
+		 ACTION_NOP,ACTION_NOP,ACTION_NOP);
+
+		StateGuiAdd("S_TestMotor_Minus360_Go",
+		 STATE_NO_FLAGS,
+		 "",
+		 "",
+		 STATE_NOP,STATE_NOP,
+		 "S_TestMotor_Minus360_enter",ACTION_NOP,ACTION_NOP);
 
 	StateGuiAdd("S_Test_SanityTest",
 	 STATE_NO_FLAGS,
