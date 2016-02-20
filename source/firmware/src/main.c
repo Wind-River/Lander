@@ -296,7 +296,7 @@ void send_LED_Backpack(uint32_t x) {
 
 void send_I2c_slave(uint8_t *buffer,uint8_t i2c_len) {
 	if (IO_REMOTE_ENABLE) {
-		i2c_polling_write (i2c, buffer, i2c_len, SISTER_I2C_ADDRESS);
+		i2c_polling_write (i2c, buffer, i2c_len, ROCKET_DISPLAY_I2C_ADDRESS);
 	}
 }
 
