@@ -55,9 +55,10 @@
 #define TRACK_CONTROL_COUNT		4
 #define POSITION_CONTROL_COUNT	1
 
-// Remote Sistem board
+// Remote control boards
 
-#define SISTER_I2C_ADDRESS 18
+#define ROCKET_DISPLAY_I2C_ADDRESS 18
+#define ROCKET_MOTOR_I2C_ADDRESS   19
 
 // Game Options
 
