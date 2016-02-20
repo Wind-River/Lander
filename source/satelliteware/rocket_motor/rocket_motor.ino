@@ -1,5 +1,21 @@
 // rocket_motor.ino: Rocket motor mover Arduino instance
- 
+
+/* <legal-notice>
+*
+* Copyright (c) 2016 Wind River Systems, Inc.
+*
+* This software has been developed and/or maintained under the Wind River 
+* CodeSwap program. The right to copy, distribute, modify, or otherwise 
+* make use of this software may be licensed only pursuant to the terms
+* of an applicable Wind River license agreement.
+* 
+* <credits>
+*   { David Reyna,  david.reyna@windriver.com,  },
+* </credits>
+*
+* </legal-notice>
+*/
+
 #include <Wire.h>
 #include <inttypes.h>
 #include "MicroAve.h"
@@ -9,26 +25,26 @@
 #define ENABLE_TIMING   1   // enable the debug timing overhead
 
 // setup I2C port
-#define SATELLITE_I2C_ADDRESS 19
+#define ROCKET_MOTOR_I2C_ADDRESS 19
 #define I2C_READ_MAX 20
 
 //
 // which Arduino
 //
 
-#undef  IS_MICRO
-#define IS_UNO
+#define IS_MICRO
+#undef  IS_UNO
 
 /* ======== ARDUINO MICRO PORT ASSIGNMENTS ========= */
 #ifdef IS_MICRO
-#define TOWER_NW_A_PORT 3
-#define TOWER_NW_B_PORT 4
-#define TOWER_NE_A_PORT 5
-#define TOWER_NE_B_PORT 6
-#define TOWER_SW_A_PORT 7
-#define TOWER_SW_B_PORT 8
-#define TOWER_SE_A_PORT 9
-#define TOWER_SE_B_PORT 10
+#define TOWER_NW_A_PORT 4
+#define TOWER_NW_B_PORT 5
+#define TOWER_NE_A_PORT 6
+#define TOWER_NE_B_PORT 7
+#define TOWER_SW_A_PORT 8
+#define TOWER_SW_B_PORT 9
+#define TOWER_SE_A_PORT 10
+#define TOWER_SE_B_PORT 11
 #endif 
 
 /* ======== ARDUINO UNO PORT ASSIGNMENTS ========= */
@@ -52,7 +68,8 @@ MicroAve ave_i2c;
 MicroAve ave_loop;
 
 /* Debugging */
-uint16_t verbose = 2;  // verbose level: 0=off, 1=ping, 2=I2C,motor updates
+#define VERBOSE_MAX 3
+uint8_t verbose = 2;  // verbose level: 0=off, 1=ping, 2=I2C,motor updates
 
 //
 // motor class
@@ -191,7 +208,8 @@ void Motor::step_loop(uint16_t u_sec_passed) {
 
   // has enough time passed for a micro-step?
   step_speed_timecount += u_sec_passed;
-  if (step_speed_timecount >= step_speed_timecount_max) {
+  if ((step_location        != step_destination        ) &&
+      (step_speed_timecount >= step_speed_timecount_max) ) {
     step_speed_timecount = step_speed_timecount - step_speed_timecount_max;
 
     if (step_location < step_destination)
@@ -199,7 +217,12 @@ void Motor::step_loop(uint16_t u_sec_passed) {
     else
       step_location--;
 
-    switch (step_location % 4) {
+    if (false) {
+      Serial.print("Move step:");
+      Serial.println(step_location & 0x03L);
+    }
+    
+    switch (step_location & 0x03L) {
       case 0:  // 1010
         digitalWrite(pin_a, LOW);
         digitalWrite(pin_b, HIGH);
@@ -222,17 +245,22 @@ void Motor::step_loop(uint16_t u_sec_passed) {
 
 void Motor::displayStatus() {
   Serial.print("Motor : ");
-  Serial.println(name);
+  Serial.print(name);
+  Serial.print("(");
+  Serial.print(pin_a);
+  Serial.print(",");
+  Serial.print(pin_b);
+  Serial.print(")");
   Serial.print("  location   =");
   Serial.print(step_location,HEX);
   Serial.print(",");
   Serial.print(step_location >> 2);
-  Serial.println(" mm");
+  Serial.print(" mm");
   Serial.print("  destination=");
   Serial.print(step_destination,HEX);
   Serial.print(",");
   Serial.print(step_destination >> 2);
-  Serial.println(" mm");
+  Serial.print(" mm");
   Serial.print("  speed=");
   Serial.print(step_speed_timecount_max);
   Serial.println(" mSec");
@@ -243,9 +271,9 @@ void Motor::displayStatus() {
 //
 
 Motor motor_nw("NW",TOWER_NW_A_PORT, TOWER_NW_B_PORT);
-Motor motor_ne("NE",TOWER_NW_A_PORT, TOWER_NW_B_PORT);
-Motor motor_sw("SW",TOWER_NW_A_PORT, TOWER_NW_B_PORT);
-Motor motor_se("SE",TOWER_NW_A_PORT, TOWER_NW_B_PORT);
+Motor motor_ne("NE",TOWER_NE_A_PORT, TOWER_NE_B_PORT);
+Motor motor_sw("SW",TOWER_SW_A_PORT, TOWER_SW_B_PORT);
+Motor motor_se("SE",TOWER_SE_A_PORT, TOWER_SE_B_PORT);
 
 void setup() {
 
@@ -255,40 +283,43 @@ void setup() {
 
   if (ENABLE_I2C) {
     Serial.println("Init I2C");
-    Wire.begin(SATELLITE_I2C_ADDRESS); // Set I2C slave address
+    Wire.begin(ROCKET_MOTOR_I2C_ADDRESS); // Set I2C slave address
     Wire.onReceive(receiveEvent); // register the I2C receive event
   }
 
   Serial.println("Setup Done!");
+  show_help();
+  
+}
 
+void show_help() {
   Serial.println("");
   Serial.println("Unit Test Commands:");
   Serial.println("  d : display status, increment deviced");
-  Serial.println("  r : reset the timing counters");
+  Serial.println("  r : reset motors and timing counters");
   Serial.println("  + : advance motors one micro-step");
   Serial.println("  - : advance motors one micro-step");
   Serial.println("  f : advance motors one mm");
   Serial.println("  b : advance motors one mm");
   Serial.println("  v : toggle the verbose level (0=off)");
   Serial.println("");
-  
 }
 
 // 
 // loop()
 //
 
-int loop_count=0;
-int ping_count=0;
-unsigned long usec_last=0;
+uint32_t loop_count=0;
+uint32_t ping_count=0;
+uint32_t usec_last=0;
 
 void loop() {
-  unsigned long usec_now;
-  unsigned long usec_diff;
+  uint32_t usec_now;
+  uint32_t usec_diff;
 
   if (ENABLE_TIMING) ave_loop.setStop();
 
-  usec_now = (unsigned long) micros();
+  usec_now = (uint32_t) micros();
   if (usec_now < usec_last) usec_now += 2L << 16; // micro count wrap-around
   usec_diff = usec_now - usec_last;
   usec_last = usec_now;
@@ -301,55 +332,63 @@ void loop() {
 
   // is there a debug request?
   if (Serial.available()) {
-    char char_out=char(Serial.read());
+    char char_in=char(Serial.read());
  
-    if ('d' == char_out) {
+    if ('d' == char_in) {
       display_debug();
     }
 
-    if ('r' == char_out) {
+    if ('r' == char_in) {
+      motor_nw.reset();
+      motor_ne.reset();
+      motor_sw.reset();
+      motor_se.reset();
       ave_i2c.reset();
     }
 
     // move the motors forward one micro step
-    if ('+' == char_out) {
+    if ('+' == char_in) {
       motor_nw.step_destination++;
       motor_ne.step_destination++;
       motor_sw.step_destination++;
       motor_se.step_destination++;
+      display_debug();
     }
     
     // move the motors back one micro step
-    if ('-' == char_out) {
+    if ('-' == char_in) {
       motor_nw.step_destination--;
       motor_ne.step_destination--;
       motor_sw.step_destination--;
       motor_se.step_destination--;
+      display_debug();
     }
     
     // move the motors forward one mm
-    if ('f' == char_out) {
-      motor_nw.step_destination += 32;
-      motor_ne.step_destination += 32;
-      motor_sw.step_destination += 32;
-      motor_se.step_destination += 32;
+    if ('f' == char_in) {
+      motor_nw.set_increment(32,MOTOR_SPEED_AUTO);
+      motor_ne.set_increment(32,MOTOR_SPEED_AUTO);
+      motor_sw.set_increment(32,MOTOR_SPEED_AUTO);
+      motor_se.set_increment(32,MOTOR_SPEED_AUTO);
+      display_debug();
     }
     
     // move the motors back one mm
-    if ('b' == char_out) {
-      motor_nw.step_destination -= 32;
-      motor_ne.step_destination -= 32;
-      motor_sw.step_destination -= 32;
-      motor_se.step_destination -= 32;
+    if ('b' == char_in) {
+      motor_nw.set_increment(-32,MOTOR_SPEED_AUTO);
+      motor_ne.set_increment(-32,MOTOR_SPEED_AUTO);
+      motor_sw.set_increment(-32,MOTOR_SPEED_AUTO);
+      motor_se.set_increment(-32,MOTOR_SPEED_AUTO);
+      display_debug();
     }
     
-    if ('v' == char_out) {
-      if (++verbose > 2) verbose=0;
+    if ('v' == char_in) {
+      if (++verbose > VERBOSE_MAX) verbose=0;
       Serial.print("** Verbose = ");
       Serial.println(verbose);
     }
     
-    if ('t' == char_out) {
+    if ('t' == char_in) {
       uint8_t my_byte= 1;
       uint16_t my_long= 1;
       uint32_t my_dlong= 1;
@@ -366,10 +405,15 @@ void loop() {
         my_dlong <<= 1;
       }
     }
+
+    if ('?' == char_in) {
+      show_help();
+    }
   }
 
-  if (++loop_count>=30) {
-    loop_count=0;
+  // update every 10 seconds
+  if ((usec_now - loop_count) > 10000000L) {
+    loop_count=usec_now;
     Serial.print("ping:");
     Serial.println(ping_count);
     ping_count++;
@@ -395,7 +439,7 @@ void display_cmnd(int howMany,  int read_count,  byte *buffer) {
   Serial.println("");
 }
 
-// Receive event from Wire's I2C master
+// Receive event frm Wire's I2C master
 void receiveEvent(int16_t howMany) {
 
   uint8_t buffer[I2C_READ_MAX];
@@ -415,12 +459,16 @@ void receiveEvent(int16_t howMany) {
 
     if ('m' == (char) buffer[0]) {
       int32_t req_step_increment = (((int32_t) buffer[1]) << 8) | ((int32_t) buffer[2]);
+      if (buffer[1] & 0x80) req_step_increment |= 0xffff0000L;
       motor_nw.set_increment(req_step_increment,MOTOR_SPEED_AUTO);
       req_step_increment = (((int32_t) buffer[3]) << 8) | ((int32_t) buffer[4]);
+      if (buffer[1] & 0x80) req_step_increment |= 0xffff0000L;
       motor_ne.set_increment(req_step_increment,MOTOR_SPEED_AUTO);
       req_step_increment = (((int32_t) buffer[5]) << 8) | ((int32_t) buffer[6]);
+      if (buffer[1] & 0x80) req_step_increment |= 0xffff0000L;
       motor_sw.set_increment(req_step_increment,MOTOR_SPEED_AUTO);
       req_step_increment = (((int32_t) buffer[7]) << 8) | ((int32_t) buffer[8]);
+      if (buffer[1] & 0x80) req_step_increment |= 0xffff0000L;
       motor_se.set_increment(req_step_increment,MOTOR_SPEED_AUTO);
     }
 
@@ -462,7 +510,7 @@ void display_debug() {
   motor_se.displayStatus();
 
   // display timing summaries
-  if (ENABLE_TIMING) {
+  if (false && ENABLE_TIMING) {
     ave_loop.displayResults("loop",true);
     ave_i2c.displayResults("i2c",true);
   }
