@@ -88,7 +88,7 @@ bool init_rocket_hardware () {
 	r_towers[ROCKET_TOWER_SE].spool_circ = (ROCKET_TOWER_SPOOL_RADIUS * 3141)/1000;
 
 	// Initialize XYZ motor controls
-	if (IO_XYZ_ENABLE) {
+	if (IO_MOTOR_ENABLE) {
 		// TODO ################
 	}
 
@@ -101,7 +101,7 @@ bool init_rocket_hardware () {
  *
  */
 
-void init_rocket_game (int32_t pos_x, int32_t pos_y, int32_t pos_z, int32_t fuel, int32_t gravity)
+void init_rocket_game (int32_t pos_x, int32_t pos_y, int32_t pos_z, int32_t fuel, int32_t gravity, int32_t mode)
  {
 
 	// set initial rocket conditions
@@ -136,6 +136,8 @@ void init_rocket_game (int32_t pos_x, int32_t pos_y, int32_t pos_z, int32_t fuel
 	r_space.thrust_y = 0;
 	r_space.thrust_z = 0;
 
+	r_game.game_mode = mode;
+
 	// move to the rocket start position
 	compute_rocket_next_position();
 	compute_rocket_cable_lengths();
@@ -151,14 +153,14 @@ void init_rocket_game (int32_t pos_x, int32_t pos_y, int32_t pos_z, int32_t fuel
 
 void compute_rocket_next_position ()
  {
-	int32_t	rocket_thrust_x=0;
-	int32_t	rocket_thrust_y=0;
-	int32_t	rocket_thrust_z=0;
 	int32_t	rocket_fuel_used=0;
-
 	int32_t	rocket_thrust_inc_x=THRUST_UMETER_INC_X;
 	int32_t	rocket_thrust_inc_y=THRUST_UMETER_INC_Y;
 	int32_t	rocket_thrust_inc_z=THRUST_UMETER_INC_Z;
+
+	r_space.thrust_x=0;
+	r_space.thrust_y=0;
+	r_space.thrust_z=0;
 
 	if (GAME_XYZ_MOVE == r_game.game) {
 		// fast absolute xy changes in 'move' mode
@@ -169,35 +171,35 @@ void compute_rocket_next_position ()
 	// Convert joystick to thrust values
 	if (r_space.rocket_fuel > 0) {
 		// Thruster X is 'on-left or 'on-right' or 'off'
-		rocket_thrust_x = r_control.analog_x - JOYSTICK_X_MID;
-		if (rocket_thrust_x < -JOYSTICK_DELTA_XY_MIN) {
+		r_space.thrust_x = r_control.analog_x - JOYSTICK_X_MID;
+		if (r_space.thrust_x < -JOYSTICK_DELTA_XY_MIN) {
 			r_space.rocket_delta_x = -rocket_thrust_inc_x;
 			rocket_fuel_used += FUEL_X_INC;
 		}
-		if (rocket_thrust_x > JOYSTICK_DELTA_XY_MIN ) {
+		if (r_space.thrust_x > JOYSTICK_DELTA_XY_MIN ) {
 			r_space.rocket_delta_x = rocket_thrust_inc_x;
 			rocket_fuel_used += FUEL_X_INC;
 		}
 
 		// Thruster Y is 'on-forward or 'on-backward' or 'off'
-		rocket_thrust_y = r_control.analog_y - JOYSTICK_Y_MID;
-		if (rocket_thrust_y < -JOYSTICK_DELTA_XY_MIN) {
+		r_space.thrust_y = r_control.analog_y - JOYSTICK_Y_MID;
+		if (r_space.thrust_y < -JOYSTICK_DELTA_XY_MIN) {
 			r_space.rocket_delta_y = -rocket_thrust_inc_y;
 			rocket_fuel_used += FUEL_Y_INC;
 		}
-		if (rocket_thrust_y > JOYSTICK_DELTA_XY_MIN ) {
+		if (r_space.thrust_y > JOYSTICK_DELTA_XY_MIN ) {
 			r_space.rocket_delta_y = rocket_thrust_inc_y;
 			rocket_fuel_used += FUEL_Y_INC;
 		}
 
 		// Thruster Z is 'proportion-up or 'proportion-down' or 'off'
-		rocket_thrust_z = r_control.analog_z - JOYSTICK_Z_MID;
-		if (rocket_thrust_z < -JOYSTICK_DELTA_Z_MIN) {
-			r_space.rocket_delta_z += (rocket_thrust_z+JOYSTICK_DELTA_Z_MIN)*rocket_thrust_inc_z;
+		r_space.thrust_z = r_control.analog_z - JOYSTICK_Z_MID;
+		if (r_space.thrust_z < -JOYSTICK_DELTA_Z_MIN) {
+			r_space.rocket_delta_z += (r_space.thrust_z+JOYSTICK_DELTA_Z_MIN)*rocket_thrust_inc_z;
 			rocket_fuel_used += FUEL_Z_INC;
 		}
-		if (rocket_thrust_z > JOYSTICK_DELTA_Z_MIN) {
-			r_space.rocket_delta_z += (rocket_thrust_z-JOYSTICK_DELTA_Z_MIN)*rocket_thrust_inc_z;
+		if (r_space.thrust_z > JOYSTICK_DELTA_Z_MIN) {
+			r_space.rocket_delta_z += (r_space.thrust_z-JOYSTICK_DELTA_Z_MIN)*rocket_thrust_inc_z;
 			rocket_fuel_used += FUEL_Z_INC;
 		}
 	}
@@ -207,10 +209,6 @@ void compute_rocket_next_position ()
 	r_space.rocket_goal_z += r_space.rocket_delta_z;
 
 	if (GAME_XYZ_MOVE != r_game.game) {
-		// Burn that fuel
-		if (GAME_FUEL_NOLIMIT != r_game.fuel_option)
-			r_space.rocket_fuel -= rocket_fuel_used;
-
 		// Acceleration due to gravity
 		if (GAME_GRAVITY_NONE != r_game.gravity_option) {
 			r_space.rocket_delta_z -= GRAVITY_UMETER_PER_SECOND;
@@ -222,14 +220,28 @@ void compute_rocket_next_position ()
 		r_space.rocket_delta_z = 0;
 	}
 
-	// Assert Limits
-	if (r_space.rocket_goal_x < X_POS_MIN)  r_space.rocket_goal_x = X_POS_MIN;
-	if (r_space.rocket_goal_x > X_POS_MAX)  r_space.rocket_goal_x = X_POS_MAX;
-	if (r_space.rocket_goal_y < Y_POS_MIN)  r_space.rocket_goal_y = Y_POS_MIN;
-	if (r_space.rocket_goal_y > Y_POS_MAX)  r_space.rocket_goal_y = Y_POS_MAX;
-	if (r_space.rocket_goal_z < Z_POS_MIN)  r_space.rocket_goal_z = Z_POS_MIN;
-	if (r_space.rocket_goal_z > Z_POS_MAX)  r_space.rocket_goal_z = Z_POS_MAX;
+	// Burn that fuel
+	r_space.rocket_fuel -= rocket_fuel_used;
+	if ((GAME_FUEL_NOLIMIT == r_game.fuel_option) || (GAME_XYZ_MOVE == r_game.game)) {
+		if (r_space.rocket_fuel < 100) r_space.rocket_fuel = FUEL_SUPPLY_INIT;
+	}
 
+	// Assert Limits
+	if (GAME_SIMULATE == r_game.game_mode) {
+		if (r_space.rocket_goal_x < X_POS_MIN)  r_space.rocket_goal_x = X_POS_MIN;
+		if (r_space.rocket_goal_x > X_POS_MAX)  r_space.rocket_goal_x = X_POS_MAX;
+		if (r_space.rocket_goal_y < Y_POS_MIN)  r_space.rocket_goal_y = Y_POS_MIN;
+		if (r_space.rocket_goal_y > Y_POS_MAX)  r_space.rocket_goal_y = Y_POS_MAX;
+		if (r_space.rocket_goal_z < Z_POS_MIN)  r_space.rocket_goal_z = Z_POS_MIN;
+		if (r_space.rocket_goal_z > Z_POS_MAX)  r_space.rocket_goal_z = Z_POS_MAX;
+	} else {
+		if (r_space.rocket_goal_x < GAME_X_POS_MIN)  r_space.rocket_goal_x = GAME_X_POS_MIN;
+		if (r_space.rocket_goal_x > GAME_X_POS_MAX)  r_space.rocket_goal_x = GAME_X_POS_MAX;
+		if (r_space.rocket_goal_y < GAME_Y_POS_MIN)  r_space.rocket_goal_y = GAME_Y_POS_MIN;
+		if (r_space.rocket_goal_y > GAME_Y_POS_MAX)  r_space.rocket_goal_y = GAME_Y_POS_MAX;
+		if (r_space.rocket_goal_z < GAME_Z_POS_MIN)  r_space.rocket_goal_z = GAME_Z_POS_MIN;
+		if (r_space.rocket_goal_z > GAME_Z_POS_MAX)  r_space.rocket_goal_z = GAME_Z_POS_MAX;
+	}
  }
 
 /*
@@ -291,7 +303,7 @@ void compute_rocket_cable_lengths ()
 
 void do_move_rocket_next_position (bool simulate)
  {
-	if (IO_XYZ_ENABLE && !simulate) {
+	if (IO_MOTOR_ENABLE && !simulate) {
 		// TODO ################ Add motor control
 
 	} else {
@@ -332,3 +344,25 @@ bool test_rocket_in_position ()
 	}
  }
 
+/*
+ * rocket_increment_send : increment a rocket motor
+ *
+ */
+
+void rocket_increment_send (int32_t increment_nw, int32_t increment_ne, int32_t increment_sw, int32_t increment_se)
+ {
+	uint8_t buf[10];
+
+	buf[0]=(uint8_t) 'm';
+	buf[1]=(uint8_t) ((increment_nw & 0x00ff00L) >> 8);
+	buf[2]=(uint8_t) ((increment_nw & 0x0000ffL)     );
+	buf[3]=(uint8_t) ((increment_ne & 0x00ff00L) >> 8);
+	buf[4]=(uint8_t) ((increment_ne & 0x0000ffL)     );
+	buf[5]=(uint8_t) ((increment_sw & 0x00ff00L) >> 8);
+	buf[6]=(uint8_t) ((increment_sw & 0x0000ffL)     );
+	buf[7]=(uint8_t) ((increment_se & 0x00ff00L) >> 8);
+	buf[8]=(uint8_t) ((increment_se & 0x0000ffL)     );
+
+	i2c_polling_write (i2c, buf, 9, ROCKET_MOTOR_I2C_ADDRESS);
+
+ }
