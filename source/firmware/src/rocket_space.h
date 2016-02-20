@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-// Dimensions of game play space, in uMeters, referenced from game center
+// Dimensions of game mechanical space, in uMeters, referenced from game center
 // Assume a 0.50 meter square game space = 500000 uMeters
 #define X_POS_MIN -500000
 #define X_POS_MAX  500000
@@ -24,6 +24,15 @@
 #define Y_POS_MAX  500000
 #define Z_POS_MIN  0
 #define Z_POS_MAX  1000000
+
+// Dimensions of game play space, in uMeters, referenced from game center
+// Assume a 0.50 meter square game space = 500000 uMeters
+#define GAME_X_POS_MIN -400000
+#define GAME_X_POS_MAX  400000
+#define GAME_Y_POS_MIN -400000
+#define GAME_Y_POS_MAX  400000
+#define GAME_Z_POS_MIN  0
+#define GAME_Z_POS_MAX  400000
 
 // Scale of game space to real space
 // Assume one millimeter to 1 meter => moon space of ~1000 meters square
@@ -133,13 +142,14 @@ extern struct ROCKET_SPACE_S r_space;
 extern struct ROCKET_TOWER_S r_towers[ROCKET_TOWER_MAX];
 
 bool init_rocket_hardware();
-void init_rocket_game (int32_t pos_x, int32_t pos_y, int32_t pos_z, int32_t fuel, int32_t gravity);
+void init_rocket_game (int32_t pos_x, int32_t pos_y, int32_t pos_z, int32_t fuel, int32_t gravity, int32_t mode);
 
 void compute_rocket_next_position();
 void compute_rocket_cable_lengths();
 void move_rocket_next_position();
 void simulate_move_rocket_next_position();
 bool test_rocket_in_position();
+void rocket_increment_send (int32_t increment_nw, int32_t increment_ne, int32_t increment_sw, int32_t increment_se);
 
 int32_t sqrt_with_accuracy(int32_t x, int32_t init_guess);
 
