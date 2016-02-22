@@ -1,3 +1,18 @@
+/* <legal-notice>
+*
+* Copyright (c) 2016 Wind River Systems, Inc.
+*
+* This software has been developed and/or maintained under the Wind River 
+* CodeSwap program. The right to copy, distribute, modify, or otherwise 
+* make use of this software may be licensed only pursuant to the terms
+* of an applicable Wind River license agreement.
+* 
+* <credits>
+*   { David Reyna,  david.reyna@windriver.com,  },
+* </credits>
+*
+* </legal-notice>
+*/
 
 #ifndef MicroAve_h
 #define MicroAve_h
