@@ -16,6 +16,32 @@
 * </legal-notice>
 */
 
+/* rocket_motor.ino: Theory of Operation
+ * 
+ * [Main Loop]
+ *   - The main loop cycles as fast a possible, counting the micro seconds passed
+ *   - The stepper movementment is divided across micro-steps, to provide the smootest possible motion
+ *   - Each motor has a micro second timeout, at which time the next micro-step is taken
+ *   - The timeout is calclualted for the number of micro-steps needed for the coming timeframe
+ *   - The timeframe is nominally 1/5 second, the time between updates from the main Rocket controller
+ * 
+ * [I2C Handler]
+ *   - There I2C messages are received from the main Rocket controller to control motion:
+ *     's' : Stop
+ *     'g' : Go 
+ *     'p' : Preset where the rocket is now (e.g. calibration from master)
+ *     'd' : Go to a new destination (e.g. goto to game start location)
+ *     'n' : Next move increment (e.g. joystick change)
+ *     '1'..'4': send 32-bit location value to respective motor (for 'p' and 'd')
+ *     
+ * [Serial Monitor:Debug]
+ *   - several commands are provided to do board bringup and test functionality. See 'show_help()'
+ *   - the debug commands always run at the highest 'verbose' level
+ *   - increase the verbose level when testing master Rocket board motor communicaton
+ *   
+*/
+
+
 #include <Wire.h>
 #include <inttypes.h>
 #include "MicroAve.h"
@@ -69,7 +95,7 @@ MicroAve ave_loop;
 
 /* Debugging */
 #define VERBOSE_MAX 3
-uint8_t verbose = 2;  // verbose level: 0=off, 1=ping, 2=I2C,motor updates
+uint8_t verbose = 0;  // verbose level: 0=off, 1=ping, 2=I2C,motor updates
 
 //
 // motor class
@@ -81,6 +107,8 @@ uint8_t verbose = 2;  // verbose level: 0=off, 1=ping, 2=I2C,motor updates
 #define MOTOR_SPEED_AUTO         0  // speed is auto-calculated per frame
 #define MOTOR_SPEED_SLOW       300  // usec per step
 #define MOTOR_SPEED_FAST       100  // usec per step
+#define MOTOR_DEST_MIN           0  // minimum (micro) step count
+#define MOTOR_DEST_MAX     120000L  // maximum (micro) step count = ((1000 mm) * (30 step/mm) * (4 micro/step)
 
 class Motor {
   public:
@@ -90,10 +118,13 @@ class Motor {
     void displayStatus();
     void reset();
 
-    void set_location(uint32_t jump_step_location);
     void move_stop();
-    
-    void set_increment(int32_t a,uint32_t speed);
+    void move_go();
+    void move_preset();
+    void move_destination();
+    void set_location(uint32_t next_location);
+   
+    void move_next(int32_t a,uint32_t speed);
     void step_loop(uint16_t u_sec_passed);
 
     const char * name;        // name of this motor's tower
@@ -106,14 +137,18 @@ class Motor {
     uint16_t step_speed_timecount;      // speed loop current useconds countdown
     uint16_t step_speed_timecount_max;  // speed loop total count, in countdown useconds
 
+    boolean request_go;         // flag that a go is requested
     boolean request_stop;       // flag that a stop is requested
     boolean request_move;       // flag that a new move is ready
+    boolean request_preset;     // flag that location is to be preset
+    boolean request_destination;// flag that destination is to be set
     int32_t req_step_location;  // pending set location of stepper motor, in micro-steps
     int32_t req_step_increment; // pending step increment value
     int32_t req_step_speed_timecount_max;     // pending speed, in countdown useconds
 
-  private:
+    boolean enable_motion;       // stop or go
 
+  private:
 };
 
 Motor::Motor(const char * name, uint16_t pin_a,uint16_t pin_b) {
@@ -128,23 +163,28 @@ void Motor::reset() {
   step_destination = 0L; 
   step_speed_timecount = 0;       
   step_speed_timecount_max = 0;
+  request_go = false;
   request_stop = false;
   request_move = false;
+  request_preset = false;
+  request_destination = false;
   req_step_increment = 0; 
   req_step_location = 0;
   req_step_speed_timecount_max = 0;
+  // class variables
+  enable_motion=true;
 }
 
 /* set the motor's absolution location */
-void Motor::set_location(uint32_t jump_step_location) {
-  req_step_location = jump_step_location << 2; // move to micro-steps
+void Motor::set_location(uint32_t next_location) {
+  req_step_location = next_location << 2; // move to micro-steps
   request_move = true;
 
   if (verbose > 1) {
     Serial.print("Set_Location[");
     Serial.print(name);
     Serial.print("]=");
-    Serial.print(jump_step_location);
+    Serial.print(next_location);
   }
 }
 
@@ -153,20 +193,38 @@ void Motor::move_stop() {
   request_stop = true;
 }
 
+/* start/resume any pending motion */
+void Motor::move_go() {
+  request_go = true;
+}
+
+/* preset current location and destination to specific value */
+void Motor::move_preset() {
+  request_preset = true;
+}
+
+/* preset current destination to specific value */
+void Motor::move_destination() {
+  request_preset = true;
+}
+
 
 /* convert i2c bytes to 32-bit signed integer */
-void Motor::set_increment(int32_t request_step_increment,uint32_t request_speed) {
+void Motor::move_next(int32_t request_step_increment,uint32_t request_speed) {
   req_step_increment = request_step_increment;
   req_step_speed_timecount_max = request_speed;
   request_move = true;
 
   if (verbose > 1) {
-    Serial.print("Set_Increment,Speed[");
+    Serial.print("\nMove_Next[");
     Serial.print(name);
     Serial.print("]=");
     Serial.print(request_step_increment);
-    Serial.print(",");
-    Serial.print(request_speed);
+    Serial.print(",Speed=");
+    if (request_speed == MOTOR_SPEED_AUTO)
+      Serial.print("auto");
+    else
+      Serial.print(request_speed);
   }
 }
 
@@ -175,40 +233,63 @@ void Motor::step_loop(uint16_t u_sec_passed) {
   // Synchronously process pending motor commands here
   if (request_stop) {
     request_stop = false;
+    enable_motion = false;
     // declare current location as the destination
-    step_destination =  step_location;
-  } else if (request_move) {
+    // step_destination =  step_location;
+  } else if (request_go) {
+    request_go = false;
+    enable_motion = true;
+  } else if (request_preset) {
+    request_preset = false;
+    step_location    = req_step_location;   
+    step_destination = req_step_location;   
+  } else if (request_destination) {
+    request_destination = false;
+    step_destination = req_step_location; 
+    request_move = true;
+  }
+  
+  if (request_move) {
     request_move = false;
-    if (req_step_location) {
-      // force set current location
-      step_location    =  req_step_location;
-      step_destination =  req_step_location;
-      req_step_location = 0;
-    } else if (req_step_increment) {
+    if (req_step_increment) {
       // update destination by increment
       step_destination += (req_step_increment * 4); // convert to micro-steps
       req_step_increment = 0;
-      // calculate new loop speed
-      step_speed_timecount_max = req_step_speed_timecount_max;
-      req_step_speed_timecount_max = 0;
-      if (step_speed_timecount_max == MOTOR_SPEED_AUTO) {
-        uint32_t frame_step_count = (step_location - step_destination);
-        if (frame_step_count) {
-          step_speed_timecount_max = (USECONDS_PER_FRAME / frame_step_count);
-        }
-      }
-      // enforce the speed limit
-      if (step_speed_timecount_max > MOTOR_SPEED_MAX)
-        step_speed_timecount_max = MOTOR_SPEED_MAX;
     }
-
+    
+    // test limits
+    if (step_destination < MOTOR_DEST_MIN)
+      step_destination = MOTOR_DEST_MIN;
+    if (step_destination > MOTOR_DEST_MAX)
+      step_destination = MOTOR_DEST_MAX;
+    
+    // calculate new loop speed
+    step_speed_timecount_max = req_step_speed_timecount_max;
+    req_step_speed_timecount_max = 0;
+    if (step_speed_timecount_max == MOTOR_SPEED_AUTO) {
+      int32_t frame_step_count = abs(step_location - step_destination);
+      if (frame_step_count) {
+        step_speed_timecount_max = (USECONDS_PER_FRAME/frame_step_count);
+      }
+      if (verbose > 1) {
+        Serial.print(" Note: [");
+        Serial.print(name);
+        Serial.print("] step_speed_timecount_max is set to ");
+        Serial.println(step_speed_timecount_max);
+      }
+    }
+    // enforce the speed limit
+    if (step_speed_timecount_max > MOTOR_SPEED_MAX)
+      step_speed_timecount_max = MOTOR_SPEED_MAX;
+  
     // reset countdown counter?
 //    step_speed_timecount = 0L;
   }  
 
   // has enough time passed for a micro-step?
   step_speed_timecount += u_sec_passed;
-  if ((step_location        != step_destination        ) &&
+  if ((enable_motion                                   ) &&
+      (step_location        != step_destination        ) &&
       (step_speed_timecount >= step_speed_timecount_max) ) {
     step_speed_timecount = step_speed_timecount - step_speed_timecount_max;
 
@@ -301,7 +382,7 @@ void show_help() {
   Serial.println("  - : advance motors one micro-step");
   Serial.println("  f : advance motors one mm");
   Serial.println("  b : advance motors one mm");
-  Serial.println("  v : toggle the verbose level (0=off)");
+  Serial.println("  v : toggle the verbose level (default: 0=off)");
   Serial.println("");
 }
 
@@ -316,6 +397,7 @@ uint32_t usec_last=0;
 void loop() {
   uint32_t usec_now;
   uint32_t usec_diff;
+  uint8_t verbose_orig = verbose;
 
   if (ENABLE_TIMING) ave_loop.setStop();
 
@@ -333,6 +415,9 @@ void loop() {
   // is there a debug request?
   if (Serial.available()) {
     char char_in=char(Serial.read());
+
+    // always use maximum verbose for debug commands
+    verbose=VERBOSE_MAX;
  
     if ('d' == char_in) {
       display_debug();
@@ -366,28 +451,23 @@ void loop() {
     
     // move the motors forward one mm
     if ('f' == char_in) {
-      motor_nw.set_increment(32,MOTOR_SPEED_AUTO);
-      motor_ne.set_increment(32,MOTOR_SPEED_AUTO);
-      motor_sw.set_increment(32,MOTOR_SPEED_AUTO);
-      motor_se.set_increment(32,MOTOR_SPEED_AUTO);
+      motor_nw.move_next(32,MOTOR_SPEED_AUTO);
+      motor_ne.move_next(32,MOTOR_SPEED_AUTO);
+      motor_sw.move_next(32,MOTOR_SPEED_AUTO);
+      motor_se.move_next(32,MOTOR_SPEED_AUTO);
       display_debug();
     }
     
     // move the motors back one mm
     if ('b' == char_in) {
-      motor_nw.set_increment(-32,MOTOR_SPEED_AUTO);
-      motor_ne.set_increment(-32,MOTOR_SPEED_AUTO);
-      motor_sw.set_increment(-32,MOTOR_SPEED_AUTO);
-      motor_se.set_increment(-32,MOTOR_SPEED_AUTO);
+      motor_nw.move_next(-32,MOTOR_SPEED_AUTO);
+      motor_ne.move_next(-32,MOTOR_SPEED_AUTO);
+      motor_sw.move_next(-32,MOTOR_SPEED_AUTO);
+      motor_se.move_next(-32,MOTOR_SPEED_AUTO);
       display_debug();
     }
     
-    if ('v' == char_in) {
-      if (++verbose > VERBOSE_MAX) verbose=0;
-      Serial.print("** Verbose = ");
-      Serial.println(verbose);
-    }
-    
+    // test available integer types
     if ('t' == char_in) {
       uint8_t my_byte= 1;
       uint16_t my_long= 1;
@@ -409,6 +489,15 @@ void loop() {
     if ('?' == char_in) {
       show_help();
     }
+ 
+    // restore verbose level
+    verbose=verbose_orig;
+
+    if ('v' == char_in) {
+      if (++verbose > VERBOSE_MAX) verbose=0;
+      Serial.print("** Verbose = ");
+      Serial.println(verbose);
+    }
   }
 
   // update every 10 seconds
@@ -417,7 +506,6 @@ void loop() {
     Serial.print("ping:");
     Serial.println(ping_count);
     ping_count++;
-//      display_debug();
   }
 
   if (ENABLE_TIMING) ave_loop.setStart();
@@ -457,21 +545,7 @@ void receiveEvent(int16_t howMany) {
 //      init_device();
     }
 
-    if ('m' == (char) buffer[0]) {
-      int32_t req_step_increment = (((int32_t) buffer[1]) << 8) | ((int32_t) buffer[2]);
-      if (buffer[1] & 0x80) req_step_increment |= 0xffff0000L;
-      motor_nw.set_increment(req_step_increment,MOTOR_SPEED_AUTO);
-      req_step_increment = (((int32_t) buffer[3]) << 8) | ((int32_t) buffer[4]);
-      if (buffer[1] & 0x80) req_step_increment |= 0xffff0000L;
-      motor_ne.set_increment(req_step_increment,MOTOR_SPEED_AUTO);
-      req_step_increment = (((int32_t) buffer[5]) << 8) | ((int32_t) buffer[6]);
-      if (buffer[1] & 0x80) req_step_increment |= 0xffff0000L;
-      motor_sw.set_increment(req_step_increment,MOTOR_SPEED_AUTO);
-      req_step_increment = (((int32_t) buffer[7]) << 8) | ((int32_t) buffer[8]);
-      if (buffer[1] & 0x80) req_step_increment |= 0xffff0000L;
-      motor_se.set_increment(req_step_increment,MOTOR_SPEED_AUTO);
-    }
-
+    // Stop motion
     if ('s' == (char) buffer[0]) {
       motor_nw.move_stop();
       motor_ne.move_stop();
@@ -479,7 +553,47 @@ void receiveEvent(int16_t howMany) {
       motor_se.move_stop();
     }
 
-    // directly set the current motor locations
+    // Go (restart) motion
+    if ('g' == (char) buffer[0]) {
+      motor_nw.move_go();
+      motor_ne.move_go();
+      motor_sw.move_go();
+      motor_se.move_go();
+    }
+
+    // Preset specific location and destination
+    if ('p' == (char) buffer[0]) {
+      motor_nw.move_preset();
+      motor_ne.move_preset();
+      motor_sw.move_preset();
+      motor_se.move_preset();
+    }
+
+    // Set specific destination 
+    if ('d' == (char) buffer[0]) {
+      motor_nw.move_destination();
+      motor_ne.move_destination();
+      motor_sw.move_destination();
+      motor_se.move_destination();
+    }
+
+    // Next move increment
+    if ('n' == (char) buffer[0]) {
+      int32_t req_step_increment = (((int32_t) buffer[1]) << 8) | ((int32_t) buffer[2]);
+      if (buffer[1] & 0x80) req_step_increment |= 0xffff0000L;
+      motor_nw.move_next(req_step_increment,MOTOR_SPEED_AUTO);
+      req_step_increment = (((int32_t) buffer[3]) << 8) | ((int32_t) buffer[4]);
+      if (buffer[1] & 0x80) req_step_increment |= 0xffff0000L;
+      motor_ne.move_next(req_step_increment,MOTOR_SPEED_AUTO);
+      req_step_increment = (((int32_t) buffer[5]) << 8) | ((int32_t) buffer[6]);
+      if (buffer[1] & 0x80) req_step_increment |= 0xffff0000L;
+      motor_sw.move_next(req_step_increment,MOTOR_SPEED_AUTO);
+      req_step_increment = (((int32_t) buffer[7]) << 8) | ((int32_t) buffer[8]);
+      if (buffer[1] & 0x80) req_step_increment |= 0xffff0000L;
+      motor_se.move_next(req_step_increment,MOTOR_SPEED_AUTO);
+    }
+
+    // set up a specific motor location and/or destination
     if (('1' <= (char) buffer[0]) && ('4' >= (char) buffer[0])) {
       uint32_t req_step_location = 
         (((uint32_t) buffer[1]) << 24) | (((uint32_t) buffer[2]) << 16) | 
