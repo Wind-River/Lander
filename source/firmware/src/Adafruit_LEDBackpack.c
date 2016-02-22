@@ -20,6 +20,14 @@
   MIT license, all text above must be included in any redistribution
  ****************************************************/
 
+/*************************************************** 
+ * modified to the Rocket API, interger support only
+* <credits>
+*   { Vincent Rubiolo, vincent.rubiolo@windriver.com,  },
+*   { David Reyna,  david.reyna@windriver.com,  },
+* </credits>
+ ****************************************************/
+ 
 #include "Adafruit_LEDBackpack.h"
 #include <i2c.h>
 #include <stdint.h>
