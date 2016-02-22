@@ -19,6 +19,15 @@
   Written by Limor Fried/Ladyada for Adafruit Industries.  
   MIT license, all text above must be included in any redistribution
  ****************************************************/
+ 
+/*************************************************** 
+ * modified to the Rocket API, interger support only
+* <credits>
+*   { Vincent Rubiolo, vincent.rubiolo@windriver.com,  },
+*   { David Reyna,  david.reyna@windriver.com,  },
+* </credits>
+ ****************************************************/
+ 
 #ifndef Adafruit_LEDBackpack_h
 #define Adafruit_LEDBackpack_h
 
