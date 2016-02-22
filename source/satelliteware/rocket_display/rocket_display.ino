@@ -1,5 +1,53 @@
 // rocket_display.ino: Rocket display Arduino instance
 
+/* <legal-notice>
+*
+* Copyright (c) 2016 Wind River Systems, Inc.
+*
+* This software has been developed and/or maintained under the Wind River 
+* CodeSwap program. The right to copy, distribute, modify, or otherwise 
+* make use of this software may be licensed only pursuant to the terms
+* of an applicable Wind River license agreement.
+* 
+* <credits>
+*   { David Reyna,  david.reyna@windriver.com,  },
+* </credits>
+*
+* </legal-notice>
+*/
+
+/* rocket_display.ino: Theory of Operation
+ *
+ * This I2C slave Arduino offloads many I/O functions, both to reduce
+ * the port limitations and the timing overhead.
+ * 
+ * The supported devices are:
+ *   LED1 for hight value (Grove - 4-Digit Display)
+ *   LED2 for speed value (Grove - 4-Digit Display)
+ *   3-bit output for sound board (Adafruit Audio FX Sound Board)
+ *   Neopixel patterns (Adafruit NeoPixel Digital RGB LED Strip)
+ *   LED-RGB output (Grove - Chainable RGB LED)
+ *   options pan/tilt servos (Adafruit Mini Pan-Tilt Kit)
+ *   
+ * All asynchronous update requests from Rocket Lander Main board and debug Serial Monitor
+ *   are posted for processing in the main synchronous loop
+ *   
+ * I2C Slave Handler:
+ *   Receive update requests from Rocket Lander Main board
+ *   
+ * Serial Monitor:
+ *   Receive unit test commands from developer - see show_help()
+ *   
+ */
+
+
+#define ENABLE_LED1     1
+#define ENABLE_LED2     1
+#define ENABLE_SOUND    1
+#define ENABLE_PAN_TILT 0
+#define ENABLE_NEOPIXEL 0
+#define ENABLE_LEDRGB   0
+ 
 #include <Wire.h>
 #include "TM1637.h"
 #include "MicroAve.h"
@@ -99,7 +147,7 @@ TM1637 tm1637_2(LED2_CLK,LED2_DIO);
 #define NEOPIXEL_MAX    6
 
 /* I2C port Setup*/
-#define SATELLITE_I2C_ADDRESS 18
+#define ROCKET_DISPLAY_I2C_ADDRESS 18
 #define I2C_READ_MAX 20
 
 /* Timing analysis objects */
@@ -227,7 +275,7 @@ void setup() {
   // init the I2c slave
   if (ENABLE_I2C) {
     Serial.println("Init I2C");
-    Wire.begin(SATELLITE_I2C_ADDRESS); // Set I2C slave address
+    Wire.begin(ROCKET_DISPLAY_I2C_ADDRESS); // Set I2C slave address
     Wire.onReceive(receiveEvent); // register the I2C receive event
   }
 
@@ -236,14 +284,17 @@ void setup() {
   // preset the outputs
   preset_outputs();
 
-  Serial.println("");
+  show_help();
+  
+}
+
+void show_help() {  Serial.println("");
   Serial.println("Unit Test Commands:");
   Serial.println("  d : display status, increment deviced");
   Serial.println("  r : reset the timing counters");
   Serial.println("  i : init the displays");
   Serial.println("  v : toggle the verbose level (0=off)");
   Serial.println("");
-
 }
 
 //
@@ -283,26 +334,29 @@ void loop() {
 
   // process any debugging commands
   if (Serial.available()) {
-    char char_out=char(Serial.read());
+    char char_in=char(Serial.read());
  
-    if ('d' == char_out) {
+    if ('d' == char_in) {
       display_debug();
     }
 
-    if ('r' == char_out) {
+    if ('r' == char_in) {
       ave_i2c.reset();
     }
 
-    if ('i' == char_out) {
+    if ('i' == char_in) {
       preset_outputs();
     }
 
-    if ('v' == char_out) {
+    if ('v' == char_in) {
       if (++verbose > VERBOSE_MAX) verbose=0;
       Serial.print("** Verbose = ");
       Serial.println(verbose);
     }
 
+    if ('?' == char_in) {
+      show_help();
+    }
   }
 
   // execute requested asynchronous updates
