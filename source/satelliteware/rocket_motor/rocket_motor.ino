@@ -20,7 +20,7 @@
  * 
  * [Main Loop]
  *   - The main loop cycles as fast a possible, counting the micro seconds passed
- *   - The stepper movementment is divided across micro-steps, to provide the smootest possible motion
+ *   - The stepper movementment is divided across the 4 micro-steps, to provide the smoothest motion
  *   - Each motor has a micro second timeout, at which time the next micro-step is taken
  *   - The timeout is calclualted for the number of micro-steps needed for the coming timeframe
  *   - The timeframe is nominally 1/5 second, the time between updates from the main Rocket controller
@@ -29,15 +29,15 @@
  *   - There I2C messages are received from the main Rocket controller to control motion:
  *     's' : Stop
  *     'g' : Go 
- *     'p' : Preset where the rocket is now (e.g. calibration from master)
- *     'd' : Go to a new destination (e.g. goto to game start location)
+ *     'p' : Preset where the rocket is now (e.g. calibration initial position from master)
+ *     'd' : go to a new Destination (e.g. goto to game start location)
  *     'n' : Next move increment (e.g. joystick change)
  *     '1'..'4': send 32-bit location value to respective motor (for 'p' and 'd')
  *     
  * [Serial Monitor:Debug]
- *   - several commands are provided to do board bringup and test functionality. See 'show_help()'
- *   - the debug commands always run at the highest 'verbose' level
- *   - increase the verbose level when testing master Rocket board motor communicaton
+ *   - Several commands are provided to do board bringup and test functionality. See 'show_help()'
+ *   - The user's debug commands always run at the highest verbose level
+ *   - Increase the verbose level while testing master Rocket board motor communicaton
  *   
 */
 
@@ -95,7 +95,13 @@ MicroAve ave_loop;
 
 /* Debugging */
 #define VERBOSE_MAX 3
-uint8_t verbose = 0;  // verbose level: 0=off, 1=ping, 2=I2C,motor updates
+uint8_t verbose = 1;  // verbose level: 0=off, 1=ping, 2=I2C,motor updates
+#define PING_LOOP_COUNT 10000000L // display ping every 10 seconds
+#define PING_LOOP_INIT   2000000L // display first ping at 2 seconds
+
+/* display motor positions after 3 seconds of non-activity */
+#define MOVEMENT_DISPLAY_COUNT 3000000L
+int32_t movement_display_counter = 0;  // coutdown pause delay
 
 //
 // motor class
@@ -216,15 +222,15 @@ void Motor::move_next(int32_t request_step_increment,uint32_t request_speed) {
   request_move = true;
 
   if (verbose > 1) {
-    Serial.print("\nMove_Next[");
+    Serial.print("Move_Next[");
     Serial.print(name);
     Serial.print("]=");
     Serial.print(request_step_increment);
     Serial.print(",Speed=");
     if (request_speed == MOTOR_SPEED_AUTO)
-      Serial.print("auto");
+      Serial.println("auto");
     else
-      Serial.print(request_speed);
+      Serial.println(request_speed);
   }
 }
 
@@ -255,6 +261,8 @@ void Motor::step_loop(uint16_t u_sec_passed) {
       // update destination by increment
       step_destination += (req_step_increment * 4); // convert to micro-steps
       req_step_increment = 0;
+      // (re)start the activity display coutdown
+      movement_display_counter = MOVEMENT_DISPLAY_COUNT;
     }
     
     // test limits
@@ -331,18 +339,15 @@ void Motor::displayStatus() {
   Serial.print(pin_a);
   Serial.print(",");
   Serial.print(pin_b);
-  Serial.print(")");
-  Serial.print("  location   =");
+  Serial.print(") location=0x");
   Serial.print(step_location,HEX);
   Serial.print(",");
   Serial.print(step_location >> 2);
-  Serial.print(" mm");
-  Serial.print("  destination=");
+  Serial.print(" steps, dest=0x");
   Serial.print(step_destination,HEX);
   Serial.print(",");
   Serial.print(step_destination >> 2);
-  Serial.print(" mm");
-  Serial.print("  speed=");
+  Serial.print(" steps, speed:");
   Serial.print(step_speed_timecount_max);
   Serial.println(" mSec");
 }
@@ -375,7 +380,7 @@ void setup() {
 
 void show_help() {
   Serial.println("");
-  Serial.println("Unit Test Commands:");
+  Serial.println("Rocket Motor: Unit Test Commands:");
   Serial.println("  d : display status, increment deviced");
   Serial.println("  r : reset motors and timing counters");
   Serial.println("  + : advance motors one micro-step");
@@ -390,15 +395,16 @@ void show_help() {
 // loop()
 //
 
-uint32_t loop_count=0;
-uint32_t ping_count=0;
+int32_t loop_count=PING_LOOP_INIT;
+int32_t ping_count=0;
 uint32_t usec_last=0;
 
 void loop() {
   uint32_t usec_now;
   uint32_t usec_diff;
   uint8_t verbose_orig = verbose;
-
+  boolean quick_display = false;
+  
   if (ENABLE_TIMING) ave_loop.setStop();
 
   usec_now = (uint32_t) micros();
@@ -437,7 +443,7 @@ void loop() {
       motor_ne.step_destination++;
       motor_sw.step_destination++;
       motor_se.step_destination++;
-      display_debug();
+      quick_display = true;
     }
     
     // move the motors back one micro step
@@ -446,16 +452,26 @@ void loop() {
       motor_ne.step_destination--;
       motor_sw.step_destination--;
       motor_se.step_destination--;
-      display_debug();
+      quick_display = true;
     }
-    
+
+    if (quick_display) {
+      Serial.print("== Quick micro-step display: NW=");
+      Serial.print(motor_nw.step_destination);
+      Serial.print(", NE=");
+      Serial.print(motor_ne.step_destination);
+      Serial.print(", SW=");
+      Serial.print(motor_sw.step_destination);
+      Serial.print(", SE=");
+      Serial.println(motor_se.step_destination);
+    }
+        
     // move the motors forward one mm
     if ('f' == char_in) {
       motor_nw.move_next(32,MOTOR_SPEED_AUTO);
       motor_ne.move_next(32,MOTOR_SPEED_AUTO);
       motor_sw.move_next(32,MOTOR_SPEED_AUTO);
       motor_se.move_next(32,MOTOR_SPEED_AUTO);
-      display_debug();
     }
     
     // move the motors back one mm
@@ -464,7 +480,6 @@ void loop() {
       motor_ne.move_next(-32,MOTOR_SPEED_AUTO);
       motor_sw.move_next(-32,MOTOR_SPEED_AUTO);
       motor_se.move_next(-32,MOTOR_SPEED_AUTO);
-      display_debug();
     }
     
     // test available integer types
@@ -499,13 +514,33 @@ void loop() {
       Serial.println(verbose);
     }
   }
-
+  
   // update every 10 seconds
-  if ((usec_now - loop_count) > 10000000L) {
-    loop_count=usec_now;
-    Serial.print("ping:");
-    Serial.println(ping_count);
-    ping_count++;
+  if (0 < verbose) {
+    loop_count -= usec_diff;
+    if (0L >= loop_count) {
+      loop_count=PING_LOOP_COUNT;
+      if (1L == ping_count) show_help();
+      Serial.print("ping:");
+      Serial.println(ping_count);
+      ping_count++;
+    }
+  }
+
+  // show status of recent activity
+  if (movement_display_counter && (0 < verbose)) {
+    movement_display_counter -= usec_diff;
+    if (0L >= movement_display_counter) {
+      Serial.print("\n== Current: NW=");
+      Serial.print(motor_nw.step_location >> 2);
+      Serial.print(", NE=");
+      Serial.print(motor_ne.step_location >> 2);
+      Serial.print(", SW=");
+      Serial.print(motor_sw.step_location >> 2);
+      Serial.print(", SE=");
+      Serial.println(motor_se.step_location >> 2);
+      movement_display_counter = 0L;
+    }
   }
 
   if (ENABLE_TIMING) ave_loop.setStart();
