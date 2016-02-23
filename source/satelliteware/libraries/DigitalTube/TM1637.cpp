@@ -16,6 +16,8 @@
 //  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 //  Modified record:
+//    Author: david.reyna@windriver.com
+//    Date: 12 February, 2016 - add ASCII support, patch for sync timeout, for Rocket/Galileo support
 //
 /*******************************************************************************/
 #include "TM1637.h"
