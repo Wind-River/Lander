@@ -16,6 +16,8 @@
  * </legal-notice>
  */
  
+
+
 // General Enablement
 
 #define IO_BUTTON_BRINGUP			true	// init state to display I/O button values
@@ -25,7 +27,7 @@
 #define IO_LCD_ENABLE 				true	// enable the LCD display
 #define IO_LED_BACKPACK_ENABLE		true	// enable the Adafruit LED i2c backback device
 #define IO_TRACKER_LOCAL_ENABLE		true	// enable the Pan&Tilt 'antenae' device
-#define IO_MOTOR_ENABLE				false	// enable the motors
+#define IO_MOTOR_ENABLE				true	// enable the motors
 
 #define IO_REMOTE_ENABLE			true	// enable the sister i2c-slave board
 											// NOTE: the connection and remote board must be up else we will hang in "setup.c"
@@ -80,9 +82,10 @@
 #define GAME_START_CENTER	1
 #define GAME_START_RANDOM	2
 
+#define GAME_DISPLAY_NORMAL	   0
 #define GAME_DISPLAY_RAW_XYZF  1
 #define GAME_DISPLAY_RAW_CABLE 2
-#define GAME_DISPLAY_NORMAL	   3
+#define GAME_DISPLAY_RAW_STEPS 3
 
 /* specify which Arduino connector pin is used as input, output and LED */
 #define INPUT_A_PIN   3
