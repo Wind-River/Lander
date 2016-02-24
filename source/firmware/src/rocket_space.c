@@ -15,7 +15,7 @@
  *
  * </legal-notice>
  */
- 
+
 #include <zephyr.h>
 
 #include <i2c.h>
@@ -27,6 +27,16 @@
 #include "rocket.h"
 #include "rocket_space.h"
 
+
+/* 
+ * forward declarations
+ *
+ */
+ 
+void rocket_position_send ();
+void rocket_command_send (uint8_t command);
+static void move_rocket_initial_position ();
+static void set_rocket_position();
 
 /*
  * Rocket Control Structures
@@ -141,8 +151,14 @@ void init_rocket_game (int32_t pos_x, int32_t pos_y, int32_t pos_z, int32_t fuel
 	// move to the rocket start position
 	compute_rocket_next_position();
 	compute_rocket_cable_lengths();
-	move_rocket_next_position();
+	
+	/* use set_rocket_position for motor test bring up */
+	// TODO ################
+	set_rocket_position();
 
+	// Move Rocket and wait until rocket is in position
+//	move_rocket_initial_position();
+	// TODO ################
 }
 
 
@@ -297,33 +313,82 @@ void compute_rocket_cable_lengths ()
  }
 
 /*
+ * set_rocket_position : preset without movement the Rocket position
+ *
+ */
+
+static void set_rocket_position ()
+ {
+	r_towers[ROCKET_TOWER_NW].step_count = (r_towers[ROCKET_TOWER_NW].length_goal*10L) / ROCKET_TOWER_STEPS_PER_UM10;
+	r_towers[ROCKET_TOWER_NE].step_count = (r_towers[ROCKET_TOWER_NW].length_goal*10L) / ROCKET_TOWER_STEPS_PER_UM10;
+	r_towers[ROCKET_TOWER_SW].step_count = (r_towers[ROCKET_TOWER_NW].length_goal*10L) / ROCKET_TOWER_STEPS_PER_UM10;
+	r_towers[ROCKET_TOWER_SE].step_count = (r_towers[ROCKET_TOWER_NW].length_goal*10L) / ROCKET_TOWER_STEPS_PER_UM10;
+
+	if (IO_MOTOR_ENABLE && (GAME_SIMULATE != r_game.game_mode)) {
+		rocket_position_send();
+		rocket_command_send(ROCKET_MOTOR_CMD_PRESET);
+	}
+	
+ }
+
+/*
+ * move_rocket_initial_position : move to the Rocket initial position
+ *
+ */
+
+static void move_rocket_initial_position ()
+ {
+	r_towers[ROCKET_TOWER_NW].step_count = (r_towers[ROCKET_TOWER_NW].length_goal*10L) / ROCKET_TOWER_STEPS_PER_UM10;
+	r_towers[ROCKET_TOWER_NE].step_count = (r_towers[ROCKET_TOWER_NW].length_goal*10L) / ROCKET_TOWER_STEPS_PER_UM10;
+	r_towers[ROCKET_TOWER_SW].step_count = (r_towers[ROCKET_TOWER_NW].length_goal*10L) / ROCKET_TOWER_STEPS_PER_UM10;
+	r_towers[ROCKET_TOWER_SE].step_count = (r_towers[ROCKET_TOWER_NW].length_goal*10L) / ROCKET_TOWER_STEPS_PER_UM10;
+
+	if (IO_MOTOR_ENABLE && (GAME_SIMULATE != r_game.game_mode)) {
+		rocket_position_send();
+		rocket_command_send(ROCKET_MOTOR_CMD_DEST);
+	}
+ }
+
+/*
  * move_rocket_next_position : incrementally move the Rocket position
  *
  */
 
-void do_move_rocket_next_position (bool simulate)
+static void do_move_tower(struct ROCKET_TOWER_S *tower) {
+	int32_t step_goal;
+	tower->length = tower->length_goal;
+
+	step_goal = (tower->length_goal *10L)/ROCKET_TOWER_STEPS_PER_UM10;
+	tower->step_diff = step_goal - tower->step_count;
+	tower->step_count = step_goal;
+}
+
+void move_rocket_next_position ()
  {
-	if (IO_MOTOR_ENABLE && !simulate) {
-		// TODO ################ Add motor control
+	r_space.rocket_x = r_space.rocket_goal_x;
+	r_space.rocket_y = r_space.rocket_goal_y;
+	r_space.rocket_z = r_space.rocket_goal_z;
 
-	} else {
-		r_space.rocket_x = r_space.rocket_goal_x;
-		r_space.rocket_y = r_space.rocket_goal_y;
-		r_space.rocket_z = r_space.rocket_goal_z;
+	do_move_tower(&r_towers[ROCKET_TOWER_NW]);
+	do_move_tower(&r_towers[ROCKET_TOWER_NE]);
+	do_move_tower(&r_towers[ROCKET_TOWER_SW]);
+	do_move_tower(&r_towers[ROCKET_TOWER_SE]);
 
-		r_towers[ROCKET_TOWER_NW].length = r_towers[ROCKET_TOWER_NW].length_goal;
-		r_towers[ROCKET_TOWER_NE].length = r_towers[ROCKET_TOWER_NE].length_goal;
-		r_towers[ROCKET_TOWER_SW].length = r_towers[ROCKET_TOWER_SW].length_goal;
-		r_towers[ROCKET_TOWER_SE].length = r_towers[ROCKET_TOWER_SE].length_goal;
+	if (IO_MOTOR_ENABLE && (GAME_SIMULATE != r_game.game_mode)) {
+		if (r_towers[ROCKET_TOWER_NW].step_diff ||
+		    r_towers[ROCKET_TOWER_NE].step_diff ||
+		    r_towers[ROCKET_TOWER_SW].step_diff ||
+		    r_towers[ROCKET_TOWER_SE].step_diff) {
+			// there is movement for the rocket
+			rocket_increment_send(
+				r_towers[ROCKET_TOWER_NW].step_diff,
+				r_towers[ROCKET_TOWER_NE].step_diff,
+				r_towers[ROCKET_TOWER_SW].step_diff,
+				r_towers[ROCKET_TOWER_SE].step_diff);
+		    }
 	}
- }
 
-void move_rocket_next_position () {
-	do_move_rocket_next_position(false);
-}
-void simulate_move_rocket_next_position () {
-	do_move_rocket_next_position(true);
-}
+ }
 
 /*
  * test_rocket_in_position : inform if rocket is in position
@@ -353,7 +418,7 @@ void rocket_increment_send (int32_t increment_nw, int32_t increment_ne, int32_t 
  {
 	uint8_t buf[10];
 
-	buf[0]=(uint8_t) 'm';
+	buf[0]=(uint8_t) ROCKET_MOTOR_CMD_NEXT;
 	buf[1]=(uint8_t) ((increment_nw & 0x00ff00L) >> 8);
 	buf[2]=(uint8_t) ((increment_nw & 0x0000ffL)     );
 	buf[3]=(uint8_t) ((increment_ne & 0x00ff00L) >> 8);
@@ -365,4 +430,40 @@ void rocket_increment_send (int32_t increment_nw, int32_t increment_ne, int32_t 
 
 	i2c_polling_write (i2c, buf, 9, ROCKET_MOTOR_I2C_ADDRESS);
 
+ }
+
+/*
+ * rocket_position_send : send the motor positions
+ *
+ */
+
+static void do_rocket_position_send (uint8_t tower_number, struct ROCKET_TOWER_S *tower)
+ {
+	uint8_t buf[10];
+	buf[0]=(uint8_t) tower_number;
+	buf[1]=(uint8_t) ((tower->step_count & 0x00ff000000L) >> 24);
+	buf[2]=(uint8_t) ((tower->step_count & 0x0000ff0000L) >> 16);
+	buf[3]=(uint8_t) ((tower->step_count & 0x000000ff00L) >>  8);
+	buf[4]=(uint8_t) ((tower->step_count & 0x00000000ffL)      );
+	i2c_polling_write (i2c, buf, 5, ROCKET_MOTOR_I2C_ADDRESS);
+ }
+
+void rocket_position_send ()
+{
+	do_rocket_position_send('1',&r_towers[ROCKET_TOWER_NW]);
+	do_rocket_position_send('2',&r_towers[ROCKET_TOWER_NE]);
+	do_rocket_position_send('3',&r_towers[ROCKET_TOWER_SW]);
+	do_rocket_position_send('4',&r_towers[ROCKET_TOWER_SE]);
+}
+
+/*
+ * rocket_command_send : send a motor command
+ *
+ */
+
+void rocket_command_send (uint8_t command)
+ {
+	uint8_t buf[10];
+	buf[0]=(uint8_t) command;
+	i2c_polling_write (i2c, buf, 1, ROCKET_MOTOR_I2C_ADDRESS);
  }
