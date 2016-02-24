@@ -114,7 +114,9 @@ int32_t movement_display_counter = 0;  // coutdown pause delay
 #define MOTOR_SPEED_SLOW       300  // usec per step
 #define MOTOR_SPEED_FAST       100  // usec per step
 #define MOTOR_DEST_MIN           0  // minimum (micro) step count
-#define MOTOR_DEST_MAX     120000L  // maximum (micro) step count = ((1000 mm) * (30 step/mm) * (4 micro/step)
+#define MOTOR_DEST_MAX     314120L  // maximum (micro) step count = ((1000000 um) / (12.734 um per step)) * (4 micro/step)
+
+#define ROCKET_TOWER_STEPS_PER_UM10  785L  // 78.525 uM per step
 
 class Motor {
   public:
@@ -242,17 +244,21 @@ void Motor::step_loop(uint16_t u_sec_passed) {
     enable_motion = false;
     // declare current location as the destination
     // step_destination =  step_location;
+    movement_display_counter = MOVEMENT_DISPLAY_COUNT;
   } else if (request_go) {
     request_go = false;
     enable_motion = true;
+    movement_display_counter = MOVEMENT_DISPLAY_COUNT;
   } else if (request_preset) {
     request_preset = false;
     step_location    = req_step_location;   
     step_destination = req_step_location;   
+    movement_display_counter = MOVEMENT_DISPLAY_COUNT;
   } else if (request_destination) {
     request_destination = false;
     step_destination = req_step_location; 
     request_move = true;
+    movement_display_counter = MOVEMENT_DISPLAY_COUNT;
   }
   
   if (request_move) {
@@ -385,8 +391,10 @@ void show_help() {
   Serial.println("  r : reset motors and timing counters");
   Serial.println("  + : advance motors one micro-step");
   Serial.println("  - : advance motors one micro-step");
-  Serial.println("  f : advance motors one mm");
-  Serial.println("  b : advance motors one mm");
+  Serial.println("  f : advance motors one revolution");
+  Serial.println("  b : advance motors one revolution");
+  Serial.println("  h : goto high position");
+  Serial.println("  l : goto low position");
   Serial.println("  v : toggle the verbose level (default: 0=off)");
   Serial.println("");
 }
@@ -466,24 +474,49 @@ void loop() {
       Serial.println(motor_se.step_destination);
     }
         
-    // move the motors forward one mm
+    // move the motors forward one revolution
     if ('f' == char_in) {
-      motor_nw.move_next(32,MOTOR_SPEED_AUTO);
-      motor_ne.move_next(32,MOTOR_SPEED_AUTO);
-      motor_sw.move_next(32,MOTOR_SPEED_AUTO);
-      motor_se.move_next(32,MOTOR_SPEED_AUTO);
+      motor_nw.move_next(200,MOTOR_SPEED_AUTO);
+      motor_ne.move_next(200,MOTOR_SPEED_AUTO);
+      motor_sw.move_next(200,MOTOR_SPEED_AUTO);
+      motor_se.move_next(200,MOTOR_SPEED_AUTO);
     }
     
-    // move the motors back one mm
+    // move the motors back one revolution
     if ('b' == char_in) {
-      motor_nw.move_next(-32,MOTOR_SPEED_AUTO);
-      motor_ne.move_next(-32,MOTOR_SPEED_AUTO);
-      motor_sw.move_next(-32,MOTOR_SPEED_AUTO);
-      motor_se.move_next(-32,MOTOR_SPEED_AUTO);
+      motor_nw.move_next(-200,MOTOR_SPEED_AUTO);
+      motor_ne.move_next(-200,MOTOR_SPEED_AUTO);
+      motor_sw.move_next(-200,MOTOR_SPEED_AUTO);
+      motor_se.move_next(-200,MOTOR_SPEED_AUTO);
     }
-    
+
+    // goto high position
+    if ('h' == char_in) {
+      uint32_t destination = 11808;
+      motor_nw.move_next(destination,MOTOR_SPEED_AUTO);
+      motor_ne.move_next(destination,MOTOR_SPEED_AUTO);
+      motor_sw.move_next(destination,MOTOR_SPEED_AUTO);
+      motor_se.move_next(destination,MOTOR_SPEED_AUTO);
+      motor_nw.move_destination();
+      motor_ne.move_destination();
+      motor_sw.move_destination();
+      motor_se.move_destination();
+    }
+
+    // goto low position
+    if ('l' == char_in) {
+      uint32_t destination = 15592;
+      motor_nw.move_next(destination,MOTOR_SPEED_AUTO);
+      motor_ne.move_next(destination,MOTOR_SPEED_AUTO);
+      motor_sw.move_next(destination,MOTOR_SPEED_AUTO);
+      motor_se.move_next(destination,MOTOR_SPEED_AUTO);
+      motor_nw.move_destination();
+      motor_ne.move_destination();
+      motor_sw.move_destination();
+      motor_se.move_destination();
+    }
     // test available integer types
-    if ('t' == char_in) {
+    if ('y' == char_in) {
       uint8_t my_byte= 1;
       uint16_t my_long= 1;
       uint32_t my_dlong= 1;
@@ -531,6 +564,7 @@ void loop() {
   if (movement_display_counter && (0 < verbose)) {
     movement_display_counter -= usec_diff;
     if (0L >= movement_display_counter) {
+      // show steps
       Serial.print("\n== Current: NW=");
       Serial.print(motor_nw.step_location >> 2);
       Serial.print(", NE=");
@@ -539,6 +573,15 @@ void loop() {
       Serial.print(motor_sw.step_location >> 2);
       Serial.print(", SE=");
       Serial.println(motor_se.step_location >> 2);
+      // show millimeters
+      Serial.print("         mm:NW=");
+      Serial.print(((motor_nw.step_location >> 2)*ROCKET_TOWER_STEPS_PER_UM10)/10000L);
+      Serial.print(", NE=");
+      Serial.print(((motor_ne.step_location >> 2)*ROCKET_TOWER_STEPS_PER_UM10)/10000L);
+      Serial.print(", SW=");
+      Serial.print(((motor_sw.step_location >> 2)*ROCKET_TOWER_STEPS_PER_UM10)/10000L);
+      Serial.print(", SE=");
+      Serial.println(((motor_se.step_location >> 2)*ROCKET_TOWER_STEPS_PER_UM10)/10000L);
       movement_display_counter = 0L;
     }
   }
@@ -546,8 +589,28 @@ void loop() {
   if (ENABLE_TIMING) ave_loop.setStart();
 }
 
+/* user debug status dump display */
+void display_debug() {
+  Serial.println("\nBoard status...");
 
-// verbose 
+  // Motor status
+  motor_nw.displayStatus();
+  motor_ne.displayStatus();
+  motor_sw.displayStatus();
+  motor_se.displayStatus();
+
+  // display timing summaries
+  if (false && ENABLE_TIMING) {
+    ave_loop.displayResults("loop",true);
+    ave_i2c.displayResults("i2c",true);
+  }
+}
+
+// 
+// Receive event from Wire's I2C master
+//
+
+/* I2C verbose */
 void display_cmnd(int howMany,  int read_count,  byte *buffer) {
   int i;
   
@@ -562,7 +625,6 @@ void display_cmnd(int howMany,  int read_count,  byte *buffer) {
   Serial.println("");
 }
 
-// Receive event frm Wire's I2C master
 void receiveEvent(int16_t howMany) {
 
   uint8_t buffer[I2C_READ_MAX];
@@ -618,13 +680,13 @@ void receiveEvent(int16_t howMany) {
       if (buffer[1] & 0x80) req_step_increment |= 0xffff0000L;
       motor_nw.move_next(req_step_increment,MOTOR_SPEED_AUTO);
       req_step_increment = (((int32_t) buffer[3]) << 8) | ((int32_t) buffer[4]);
-      if (buffer[1] & 0x80) req_step_increment |= 0xffff0000L;
+      if (buffer[3] & 0x80) req_step_increment |= 0xffff0000L;
       motor_ne.move_next(req_step_increment,MOTOR_SPEED_AUTO);
       req_step_increment = (((int32_t) buffer[5]) << 8) | ((int32_t) buffer[6]);
-      if (buffer[1] & 0x80) req_step_increment |= 0xffff0000L;
+      if (buffer[5] & 0x80) req_step_increment |= 0xffff0000L;
       motor_sw.move_next(req_step_increment,MOTOR_SPEED_AUTO);
       req_step_increment = (((int32_t) buffer[7]) << 8) | ((int32_t) buffer[8]);
-      if (buffer[1] & 0x80) req_step_increment |= 0xffff0000L;
+      if (buffer[7] & 0x80) req_step_increment |= 0xffff0000L;
       motor_se.move_next(req_step_increment,MOTOR_SPEED_AUTO);
     }
 
@@ -646,21 +708,6 @@ void receiveEvent(int16_t howMany) {
   }
 
   if (ENABLE_TIMING) ave_i2c.setStop();
-  if (verbose > 0) display_cmnd(howMany,read_count,buffer);
+  if (verbose > 1) display_cmnd(howMany,read_count,buffer);
 }
 
-void display_debug() {
-  Serial.println("\nBoard status...");
-
-  // Motor status
-  motor_nw.displayStatus();
-  motor_ne.displayStatus();
-  motor_sw.displayStatus();
-  motor_se.displayStatus();
-
-  // display timing summaries
-  if (false && ENABLE_TIMING) {
-    ave_loop.displayResults("loop",true);
-    ave_i2c.displayResults("i2c",true);
-  }
-}
