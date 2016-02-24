@@ -16,7 +16,6 @@
  * </legal-notice>
  */
 
-
 // Dimensions of game mechanical space, in uMeters, referenced from game center
 // Assume a 0.50 meter square game space = 500000 uMeters
 #define X_POS_MIN -500000
@@ -98,8 +97,9 @@
 // ASSUME spool radius of 5 mM = 5000 uM
 // ASSUME spool stepper count of 200
 // Results in step size of ((5000 uM * 3141)/1000)/200 = 15705/200 =  78.525 uM
-#define ROCKET_TOWER_SPOOL_RADIUS   5000
-#define ROCKET_TOWER_SPOOL_STEPS    200
+#define ROCKET_TOWER_SPOOL_RADIUS   5000L
+#define ROCKET_TOWER_SPOOL_STEPS     200L
+#define ROCKET_TOWER_STEPS_PER_UM10  785L	// 78.525 uM per step
 
 // Exported Structures and Funtions
 
@@ -112,6 +112,9 @@ struct ROCKET_TOWER_S {
 
 	int32_t	length;			// string deploy length current
 	int32_t	length_goal;	// string deploy length goal
+
+	int32_t	step_count;		// calculated tower motor step count
+	int32_t	step_diff;		// next tower motor step move
 
 	int32_t	spool_circ;		// stepper's spool circumference in uM, to be divided by step size
 	int32_t	move_steps;		// step count to move stepper
@@ -139,6 +142,13 @@ struct ROCKET_SPACE_S {
 
 };
 
+/* commands to Rocket Motor board */
+#define ROCKET_MOTOR_CMD_GO     'g'
+#define ROCKET_MOTOR_CMD_STOP   's'
+#define ROCKET_MOTOR_CMD_PRESET 'p'
+#define ROCKET_MOTOR_CMD_DEST   'd'
+#define ROCKET_MOTOR_CMD_NEXT   'n'
+
 extern struct ROCKET_SPACE_S r_space;
 extern struct ROCKET_TOWER_S r_towers[ROCKET_TOWER_MAX];
 
@@ -151,6 +161,9 @@ void move_rocket_next_position();
 void simulate_move_rocket_next_position();
 bool test_rocket_in_position();
 void rocket_increment_send (int32_t increment_nw, int32_t increment_ne, int32_t increment_sw, int32_t increment_se);
+
+void rocket_position_send ();
+void rocket_command_send (uint8_t command);
 
 int32_t sqrt_with_accuracy(int32_t x, int32_t init_guess);
 
