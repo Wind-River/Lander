@@ -20,9 +20,8 @@
  * 
  * [Main Loop]
  *   - The main loop cycles as fast a possible, counting the micro seconds passed
- *   - The stepper movementment is divided across the 4 micro-steps, to provide the smoothest motion
  *   - Each motor has a micro second timeout, at which time the next micro-step is taken
- *   - The timeout is calclualted for the number of micro-steps needed for the coming timeframe
+ *   - The timeout is calclualted for the number of steps needed for the coming timeframe
  *   - The timeframe is nominally 1/5 second, the time between updates from the main Rocket controller
  * 
  * [I2C Handler]
@@ -46,7 +45,7 @@
 #include <inttypes.h>
 #include "MicroAve.h"
 
-// General Enbles
+// General Enables
 #define ENABLE_I2C      1   // Enable the I2C slave mode
 #define ENABLE_TIMING   1   // enable the debug timing overhead
 
@@ -71,6 +70,8 @@
 #define TOWER_SW_B_PORT 9
 #define TOWER_SE_A_PORT 10
 #define TOWER_SE_B_PORT 11
+#define TOWER_PORT_MIN  TOWER_NW_A_PORT
+#define TOWER_PORT_MAX  TOWER_SE_B_PORT
 #endif 
 
 /* ======== ARDUINO UNO PORT ASSIGNMENTS ========= */
@@ -83,6 +84,8 @@
 #define TOWER_SW_B_PORT 8
 #define TOWER_SE_A_PORT 9
 #define TOWER_SE_B_PORT 10
+#define TOWER_PORT_MIN  TOWER_NW_A_PORT
+#define TOWER_PORT_MAX  TOWER_SE_B_PORT
 #endif
 
 //
@@ -109,12 +112,12 @@ int32_t movement_display_counter = 0;  // coutdown pause delay
 
 #define FRAMES_PER_SECOND        5  // 1/5 second, as per rocket control cpu
 #define USECONDS_PER_FRAME 200000L
-#define MOTOR_SPEED_MAX         50  // max steps per frame
+#define MOTOR_SPEED_MAX  (USECONDS_PER_FRAME/15)  // max steps per frame uSec timeout
 #define MOTOR_SPEED_AUTO         0  // speed is auto-calculated per frame
 #define MOTOR_SPEED_SLOW       300  // usec per step
 #define MOTOR_SPEED_FAST       100  // usec per step
-#define MOTOR_DEST_MIN           0  // minimum (micro) step count
-#define MOTOR_DEST_MAX     314120L  // maximum (micro) step count = ((1000000 um) / (12.734 um per step)) * (4 micro/step)
+#define MOTOR_DEST_MIN           0  // minimum step count
+#define MOTOR_DEST_MAX      78530L  // maximum step count = ((1000000 um) / (12.734 um per step))
 
 #define ROCKET_TOWER_STEPS_PER_UM10  785L  // 78.525 uM per step
 
@@ -130,7 +133,7 @@ class Motor {
     void move_go();
     void move_preset();
     void move_destination();
-    void set_location(uint32_t next_location);
+    void set_location(uint32_t request_location,uint32_t request_speed);
    
     void move_next(int32_t a,uint32_t speed);
     void step_loop(uint16_t u_sec_passed);
@@ -139,8 +142,8 @@ class Motor {
     uint16_t pin_a;
     uint16_t pin_b;
     
-    int32_t step_location;    // current location of stepper motor, in micro-steps
-    int32_t step_destination; // goal location of stepper motor, in micro-steps
+    int32_t step_location;    // current location of stepper motor, in steps
+    int32_t step_destination; // goal location of stepper motor, in steps
     
     uint16_t step_speed_timecount;      // speed loop current useconds countdown
     uint16_t step_speed_timecount_max;  // speed loop total count, in countdown useconds
@@ -150,7 +153,7 @@ class Motor {
     boolean request_move;       // flag that a new move is ready
     boolean request_preset;     // flag that location is to be preset
     boolean request_destination;// flag that destination is to be set
-    int32_t req_step_location;  // pending set location of stepper motor, in micro-steps
+    int32_t req_step_location;  // pending set location of stepper motor, in steps
     int32_t req_step_increment; // pending step increment value
     int32_t req_step_speed_timecount_max;     // pending speed, in countdown useconds
 
@@ -184,15 +187,20 @@ void Motor::reset() {
 }
 
 /* set the motor's absolution location */
-void Motor::set_location(uint32_t next_location) {
-  req_step_location = next_location << 2; // move to micro-steps
-  request_move = true;
+void Motor::set_location(uint32_t request_location,uint32_t request_speed) {
+  req_step_location = request_location;
+  req_step_speed_timecount_max = request_speed;
 
   if (verbose > 1) {
     Serial.print("Set_Location[");
     Serial.print(name);
     Serial.print("]=");
-    Serial.print(next_location);
+    Serial.print(request_location);
+    Serial.print(",");
+    if (request_speed == MOTOR_SPEED_AUTO)
+      Serial.println("auto");
+    else
+      Serial.println(request_speed);
   }
 }
 
@@ -213,7 +221,7 @@ void Motor::move_preset() {
 
 /* preset current destination to specific value */
 void Motor::move_destination() {
-  request_preset = true;
+  request_destination = true;
 }
 
 
@@ -265,7 +273,7 @@ void Motor::step_loop(uint16_t u_sec_passed) {
     request_move = false;
     if (req_step_increment) {
       // update destination by increment
-      step_destination += (req_step_increment * 4); // convert to micro-steps
+      step_destination += req_step_increment;
       req_step_increment = 0;
       // (re)start the activity display coutdown
       movement_display_counter = MOVEMENT_DISPLAY_COUNT;
@@ -285,22 +293,23 @@ void Motor::step_loop(uint16_t u_sec_passed) {
       if (frame_step_count) {
         step_speed_timecount_max = (USECONDS_PER_FRAME/frame_step_count);
       }
-      if (verbose > 1) {
-        Serial.print(" Note: [");
-        Serial.print(name);
-        Serial.print("] step_speed_timecount_max is set to ");
-        Serial.println(step_speed_timecount_max);
-      }
     }
     // enforce the speed limit
-    if (step_speed_timecount_max > MOTOR_SPEED_MAX)
+    if (step_speed_timecount_max < MOTOR_SPEED_MAX)
       step_speed_timecount_max = MOTOR_SPEED_MAX;
+
+    if (verbose > 1) {
+      Serial.print(" Note: [");
+      Serial.print(name);
+      Serial.print("] step_speed_timecount_max is set to ");
+      Serial.println(step_speed_timecount_max);
+    }
   
     // reset countdown counter?
 //    step_speed_timecount = 0L;
   }  
 
-  // has enough time passed for a micro-step?
+  // has enough time passed for a step?
   step_speed_timecount += u_sec_passed;
   if ((enable_motion                                   ) &&
       (step_location        != step_destination        ) &&
@@ -368,7 +377,8 @@ Motor motor_sw("SW",TOWER_SW_A_PORT, TOWER_SW_B_PORT);
 Motor motor_se("SE",TOWER_SE_A_PORT, TOWER_SE_B_PORT);
 
 void setup() {
-
+  uint8_t i;
+  
   Serial.begin(9600);           // start serial for output
   delay(1000);
   Serial.println("Init Start...");
@@ -377,6 +387,12 @@ void setup() {
     Serial.println("Init I2C");
     Wire.begin(ROCKET_MOTOR_I2C_ADDRESS); // Set I2C slave address
     Wire.onReceive(receiveEvent); // register the I2C receive event
+    Wire.onRequest(requestEvent); // register the I2C request event
+  }
+
+  // set up the motor control output pins
+  for (i=TOWER_PORT_MIN;i<=TOWER_PORT_MAX;i++) {
+    pinMode(i,OUTPUT);
   }
 
   Serial.println("Setup Done!");
@@ -389,8 +405,8 @@ void show_help() {
   Serial.println("Rocket Motor: Unit Test Commands:");
   Serial.println("  d : display status, increment deviced");
   Serial.println("  r : reset motors and timing counters");
-  Serial.println("  + : advance motors one micro-step");
-  Serial.println("  - : advance motors one micro-step");
+  Serial.println("  + : advance motors one step");
+  Serial.println("  - : advance motors one step");
   Serial.println("  f : advance motors one revolution");
   Serial.println("  b : advance motors one revolution");
   Serial.println("  h : goto high position");
@@ -445,7 +461,7 @@ void loop() {
       ave_i2c.reset();
     }
 
-    // move the motors forward one micro step
+    // move the motors forward one step
     if ('+' == char_in) {
       motor_nw.step_destination++;
       motor_ne.step_destination++;
@@ -454,7 +470,7 @@ void loop() {
       quick_display = true;
     }
     
-    // move the motors back one micro step
+    // move the motors back one step
     if ('-' == char_in) {
       motor_nw.step_destination--;
       motor_ne.step_destination--;
@@ -464,7 +480,7 @@ void loop() {
     }
 
     if (quick_display) {
-      Serial.print("== Quick micro-step display: NW=");
+      Serial.print("== Quick step display: NW=");
       Serial.print(motor_nw.step_destination);
       Serial.print(", NE=");
       Serial.print(motor_ne.step_destination);
@@ -476,10 +492,10 @@ void loop() {
         
     // move the motors forward one revolution
     if ('f' == char_in) {
-      motor_nw.move_next(200,MOTOR_SPEED_AUTO);
-      motor_ne.move_next(200,MOTOR_SPEED_AUTO);
-      motor_sw.move_next(200,MOTOR_SPEED_AUTO);
-      motor_se.move_next(200,MOTOR_SPEED_AUTO);
+      motor_nw.move_next(100,MOTOR_SPEED_AUTO);
+      motor_ne.move_next(100,MOTOR_SPEED_AUTO);
+      motor_sw.move_next(100,MOTOR_SPEED_AUTO);
+      motor_se.move_next(100,MOTOR_SPEED_AUTO);
     }
     
     // move the motors back one revolution
@@ -493,10 +509,10 @@ void loop() {
     // goto high position
     if ('h' == char_in) {
       uint32_t destination = 11808;
-      motor_nw.move_next(destination,MOTOR_SPEED_AUTO);
-      motor_ne.move_next(destination,MOTOR_SPEED_AUTO);
-      motor_sw.move_next(destination,MOTOR_SPEED_AUTO);
-      motor_se.move_next(destination,MOTOR_SPEED_AUTO);
+      motor_nw.set_location(destination,MOTOR_SPEED_AUTO);
+      motor_ne.set_location(destination,MOTOR_SPEED_AUTO);
+      motor_sw.set_location(destination,MOTOR_SPEED_AUTO);
+      motor_se.set_location(destination,MOTOR_SPEED_AUTO);
       motor_nw.move_destination();
       motor_ne.move_destination();
       motor_sw.move_destination();
@@ -506,10 +522,10 @@ void loop() {
     // goto low position
     if ('l' == char_in) {
       uint32_t destination = 15592;
-      motor_nw.move_next(destination,MOTOR_SPEED_AUTO);
-      motor_ne.move_next(destination,MOTOR_SPEED_AUTO);
-      motor_sw.move_next(destination,MOTOR_SPEED_AUTO);
-      motor_se.move_next(destination,MOTOR_SPEED_AUTO);
+      motor_nw.set_location(destination,MOTOR_SPEED_AUTO);
+      motor_ne.set_location(destination,MOTOR_SPEED_AUTO);
+      motor_sw.set_location(destination,MOTOR_SPEED_AUTO);
+      motor_se.set_location(destination,MOTOR_SPEED_AUTO);
       motor_nw.move_destination();
       motor_ne.move_destination();
       motor_sw.move_destination();
@@ -566,22 +582,22 @@ void loop() {
     if (0L >= movement_display_counter) {
       // show steps
       Serial.print("\n== Current: NW=");
-      Serial.print(motor_nw.step_location >> 2);
+      Serial.print(motor_nw.step_location);
       Serial.print(", NE=");
-      Serial.print(motor_ne.step_location >> 2);
+      Serial.print(motor_ne.step_location);
       Serial.print(", SW=");
-      Serial.print(motor_sw.step_location >> 2);
+      Serial.print(motor_sw.step_location);
       Serial.print(", SE=");
-      Serial.println(motor_se.step_location >> 2);
+      Serial.println(motor_se.step_location);
       // show millimeters
       Serial.print("         mm:NW=");
-      Serial.print(((motor_nw.step_location >> 2)*ROCKET_TOWER_STEPS_PER_UM10)/10000L);
+      Serial.print((motor_nw.step_location * ROCKET_TOWER_STEPS_PER_UM10)/10000L);
       Serial.print(", NE=");
-      Serial.print(((motor_ne.step_location >> 2)*ROCKET_TOWER_STEPS_PER_UM10)/10000L);
+      Serial.print((motor_ne.step_location * ROCKET_TOWER_STEPS_PER_UM10)/10000L);
       Serial.print(", SW=");
-      Serial.print(((motor_sw.step_location >> 2)*ROCKET_TOWER_STEPS_PER_UM10)/10000L);
+      Serial.print((motor_sw.step_location * ROCKET_TOWER_STEPS_PER_UM10)/10000L);
       Serial.print(", SE=");
-      Serial.println(((motor_se.step_location >> 2)*ROCKET_TOWER_STEPS_PER_UM10)/10000L);
+      Serial.println((motor_se.step_location * ROCKET_TOWER_STEPS_PER_UM10)/10000L);
       movement_display_counter = 0L;
     }
   }
@@ -696,13 +712,13 @@ void receiveEvent(int16_t howMany) {
         (((uint32_t) buffer[1]) << 24) | (((uint32_t) buffer[2]) << 16) | 
         (((uint32_t) buffer[3]) <<  8) |  ((uint32_t) buffer[4]);
       if        ('1' == (char) buffer[0]) {
-        motor_nw.set_location(req_step_location);
+        motor_nw.set_location(req_step_location,MOTOR_SPEED_AUTO);
       } else if ('2' == (char) buffer[0]) {
-        motor_ne.set_location(req_step_location);
+        motor_ne.set_location(req_step_location,MOTOR_SPEED_AUTO);
       } else if ('3' == (char) buffer[0]) {
-        motor_sw.set_location(req_step_location);
+        motor_sw.set_location(req_step_location,MOTOR_SPEED_AUTO);
       } else if ('4' == (char) buffer[0]) {
-        motor_se.set_location(req_step_location);
+        motor_se.set_location(req_step_location,MOTOR_SPEED_AUTO);
       }
     }  
   }
@@ -711,3 +727,28 @@ void receiveEvent(int16_t howMany) {
   if (verbose > 1) display_cmnd(howMany,read_count,buffer);
 }
 
+void requestEvent() {
+  uint8_t b;
+  int32_t step_compare = MOTOR_DEST_MAX / 2;
+  int32_t step_diff;
+  int32_t step_diff_max = 0L;
+
+  step_diff = abs(motor_nw.step_location - motor_nw.step_destination);
+  if (step_diff_max < step_diff) step_diff_max = step_diff;
+  step_diff = abs(motor_ne.step_location - motor_ne.step_destination);
+  if (step_diff_max < step_diff) step_diff_max = step_diff;
+  step_diff = abs(motor_sw.step_location - motor_sw.step_destination);
+  if (step_diff_max < step_diff) step_diff_max = step_diff;
+  step_diff = abs(motor_se.step_location - motor_se.step_destination);
+  if (step_diff_max < step_diff) step_diff_max = step_diff;
+
+  //compare this value to half of MOTOR_DEST_MAX, get percent close
+  if (step_diff > step_compare) {
+    step_compare=0;
+  } else {
+     step_compare = ((step_compare - step_diff) * 100L)/step_compare;
+  }
+  
+  b = (uint8_t) step_compare;
+  Wire.write(b); // respond with message of 1 byte
+}
