@@ -4,17 +4,18 @@
  *
  * Copyright (c) 2016 Wind River Systems, Inc.
  *
- * This software has been developed and/or maintained under the Wind River 
- * CodeSwap program. The right to copy, distribute, modify, or otherwise 
+ * This software has been developed and/or maintained under the Wind River
+ * CodeSwap program. The right to copy, distribute, modify, or otherwise
  * make use of this software may be licensed only pursuant to the terms
  * of an applicable Wind River license agreement.
- * 
+ *
  * <credits>
  *   { David Reyna,  david.reyna@windriver.com,  },
  * </credits>
  *
  * </legal-notice>
  */
+
 
 #include <zephyr.h>
 
@@ -187,6 +188,99 @@ void jump_state(char *select_state_name) {
  *
  */
 
+
+static void S_Start_Home_enter () {
+	init_rocket_game(ROCKET_HOME_X, ROCKET_HOME_Y, ROCKET_HOME_Z, GAME_FUEL_NOLIMIT, GAME_GRAVITY_NONE,GAME_AT_HOME);
+	jump_state("S_Main_Play");
+}
+
+static void S_Calibrate_enter () {
+	// tell the motors to pretend that they are game start position, to avoid step limits 
+	init_rocket_game(0, 0, Z_POS_MAX/2, GAME_FUEL_NOLIMIT, GAME_GRAVITY_NONE,GAME_AT_HOME);
+}
+
+static void S_Calibrate_loop () {
+	int32_t nw_inc=0,ne_inc=0,sw_inc=0,se_inc=0;
+	int32_t x_delta,y_delta,z_delta;
+
+	// Thruster Z is 'proportion-up or 'proportion-down' or 'off'
+	z_delta = r_control.analog_z - JOYSTICK_Z_MID;
+	if (z_delta < -JOYSTICK_DELTA_Z_MIN) {
+		z_delta = (z_delta+JOYSTICK_DELTA_Z_MIN)*ROCKET_CALIBRATE_INC_Z;
+	}
+	if (z_delta > JOYSTICK_DELTA_Z_MIN) {
+		z_delta = (z_delta-JOYSTICK_DELTA_Z_MIN)*ROCKET_CALIBRATE_INC_Z;
+	}
+
+	// Convert joystick to tower selection
+	x_delta = r_control.analog_x - JOYSTICK_X_MID;
+	if (x_delta < -JOYSTICK_DELTA_XY_MIN) {
+		x_delta = -1;
+	} else if (x_delta > JOYSTICK_DELTA_XY_MIN ) {
+		x_delta = 1;
+	} else {
+		x_delta = 0;
+	}
+
+	// Thruster Y is 'on-forward or 'on-backward' or 'off'
+	y_delta = r_control.analog_y - JOYSTICK_Y_MID;
+	if (y_delta < -JOYSTICK_DELTA_XY_MIN) {
+		y_delta = -1;
+	} else if (y_delta > JOYSTICK_DELTA_XY_MIN ) {
+		y_delta = 1;
+	} else {
+		y_delta = 0;
+	}
+	
+	// scale Z from nm to steps
+	z_delta = (z_delta * 10L) / ROCKET_TOWER_STEPS_PER_UM10;
+
+	// if quadarant, then only affect that tower
+	if      ((x_delta < 0) && (y_delta > 0)) nw_inc=z_delta;
+	else if ((x_delta > 0) && (y_delta > 0)) ne_inc=z_delta;
+	else if ((x_delta < 0) && (y_delta < 0)) sw_inc=z_delta;
+	else if ((x_delta > 0) && (y_delta < 0)) se_inc=z_delta;
+	else if ((x_delta == 0) && (y_delta == 0)) {
+		// if center, then affect all towers
+		nw_inc=z_delta;
+		ne_inc=z_delta;
+		sw_inc=z_delta;
+		se_inc=z_delta;
+	}
+
+	// send the increment
+	rocket_increment_send (nw_inc, ne_inc, sw_inc, se_inc);
+
+}
+
+static void S_Calibrate_Done_enter () {
+	init_rocket_game(ROCKET_CALIBRATE_X, ROCKET_CALIBRATE_Y, ROCKET_CALIBRATE_Z, GAME_FUEL_NOLIMIT, GAME_GRAVITY_NONE,GAME_AT_HOME);
+	jump_state("S_Main_Play");
+}
+
+static void S_Calibrate_Status_enter  () {
+	PRINT("\nStep Status:NW=%ld, NE=%ld, SW=%ld, SE=%ld\n",
+		r_towers[ROCKET_TOWER_NW].step_count,
+		r_towers[ROCKET_TOWER_NE].step_count,
+		r_towers[ROCKET_TOWER_SW].step_count,
+		r_towers[ROCKET_TOWER_SE].step_count);
+	PRINT("        nm :NW=%ld, NE=%ld, SW=%ld, SE=%ld\n\n",
+		(r_towers[ROCKET_TOWER_NW].step_count*ROCKET_TOWER_STEPS_PER_UM10)/UM10_PER_MILLIMETER,
+		(r_towers[ROCKET_TOWER_NE].step_count*ROCKET_TOWER_STEPS_PER_UM10)/UM10_PER_MILLIMETER,
+		(r_towers[ROCKET_TOWER_SW].step_count*ROCKET_TOWER_STEPS_PER_UM10)/UM10_PER_MILLIMETER,
+		(r_towers[ROCKET_TOWER_SE].step_count*ROCKET_TOWER_STEPS_PER_UM10)/UM10_PER_MILLIMETER);
+	jump_state("S_Calibrate");
+}
+
+static void S_Test_Motor_Status_loop () {
+	uint8_t buf[10];
+	uint32_t len = 1;
+	buf[0] = (uint8_t) '?';
+	i2c_read(i2c,buf,len,ROCKET_MOTOR_I2C_ADDRESS);
+	sprintf(state_array[state_now].display_1,"Status=%4d",buf[0]);
+	display_state();
+}
+
 static void updateLedDisplays () {
 	// show fuel
 	send_LED_Backpack(r_space.rocket_fuel);
@@ -268,6 +362,16 @@ static void S_Game_Play_loop () {
 			r_towers[ROCKET_TOWER_SW].length_goal/1000,
 			r_towers[ROCKET_TOWER_SE].length_goal/1000);
 		display_state();
+	} else if (GAME_DISPLAY_RAW_STEPS == r_game.play_display_mode)  {
+		sprintf(buffer,"NW=%05d E=%05d",
+			r_towers[ROCKET_TOWER_NW].step_count,
+			r_towers[ROCKET_TOWER_NE].step_count);
+		set_lcd_display(0,buffer);
+		sprintf(buffer,"SW=%05d E=%05d",
+			r_towers[ROCKET_TOWER_SW].step_count,
+			r_towers[ROCKET_TOWER_SE].step_count);
+		set_lcd_display(1,buffer);
+		display_state();
 	} else {
 		sprintf(buffer,"Z=%02d X=%03d Y=%03d",
 			r_space.rocket_z/SCALE_GAME_UMETER_TO_MOON_CMETER,
@@ -307,6 +411,8 @@ static void S_Game_Display_Next_enter () {
 		r_game.play_display_mode = GAME_DISPLAY_RAW_XYZF;
 	} else if (GAME_DISPLAY_RAW_XYZF == r_game.play_display_mode) {
 		r_game.play_display_mode = GAME_DISPLAY_RAW_CABLE;
+	} else if (GAME_DISPLAY_RAW_CABLE == r_game.play_display_mode) {
+		r_game.play_display_mode = GAME_DISPLAY_RAW_STEPS;
 	} else {
 		r_game.play_display_mode = GAME_DISPLAY_NORMAL;
 	}
@@ -603,15 +709,15 @@ static void S_Test_Simulation_Steps_loop () {
 		(r_towers[ROCKET_TOWER_NE].length_goal-r_towers[ROCKET_TOWER_NW].length)/1000,
 		(r_towers[ROCKET_TOWER_SW].length_goal-r_towers[ROCKET_TOWER_NW].length)/1000,
 		(r_towers[ROCKET_TOWER_SE].length_goal-r_towers[ROCKET_TOWER_NW].length)/1000,
-		r_towers[ROCKET_TOWER_NW].move_steps,
-		r_towers[ROCKET_TOWER_NE].move_steps,
-		r_towers[ROCKET_TOWER_SW].move_steps,
-		r_towers[ROCKET_TOWER_SE].move_steps
+		r_towers[ROCKET_TOWER_NW].step_diff,
+		r_towers[ROCKET_TOWER_NE].step_diff,
+		r_towers[ROCKET_TOWER_SW].step_diff,
+		r_towers[ROCKET_TOWER_SE].step_diff
 		);
 	log(buffer);
 
 	// Move the tower cables
-	simulate_move_rocket_next_position();
+	move_rocket_next_position();
 }
 
 
@@ -750,6 +856,27 @@ static void S_Test_Sound_Next_enter () {
 	jump_state("S_Test_Sound");
 }
 
+static uint32_t motor_nextset_value=1L;
+static void test_set_motor_position(uint32_t motor_position) {
+	r_towers[ROCKET_TOWER_NW].step_count = motor_position;
+	r_towers[ROCKET_TOWER_NE].step_count = motor_position;
+	r_towers[ROCKET_TOWER_SW].step_count = motor_position;
+	r_towers[ROCKET_TOWER_SE].step_count = motor_position;
+	rocket_position_send();
+	rocket_command_send(ROCKET_MOTOR_CMD_PRESET);
+}
+static void S_TestMotor_NextSet_enter () {
+	PRINT("\nMotor_NextSet=%lx\n",motor_nextset_value);
+	test_set_motor_position(motor_nextset_value);
+	motor_nextset_value = motor_nextset_value << 1;
+	if (motor_nextset_value > 0x100000L) motor_nextset_value = 0;
+	jump_state("S_TestMotor_NextSet");
+}
+static void S_TestMotor_NextSet_Done_enter () {
+	test_set_motor_position(0L);
+	jump_state("S_TestMotor_PlusStep");
+}
+
 static void S_TestMotor_PlusStep_enter () {
 	rocket_increment_send (1, 1, 1, 1);
 	jump_state("S_TestMotor_PlusStep");
@@ -799,7 +926,7 @@ void cable_steps_start(int32_t x, int32_t y, int32_t z) {
 	r_space.rocket_goal_z = z;
 
 	compute_rocket_cable_lengths();
-	simulate_move_rocket_next_position();
+	move_rocket_next_position();
 }
 
 void cable_steps_move(int32_t x, int32_t y, int32_t z) {
@@ -814,12 +941,12 @@ void cable_steps_move(int32_t x, int32_t y, int32_t z) {
 		r_space.rocket_goal_x-r_space.rocket_x,
 		r_space.rocket_goal_y-r_space.rocket_y,
 		r_space.rocket_goal_z-r_space.rocket_z,
-		r_towers[ROCKET_TOWER_NW].move_steps,
-		r_towers[ROCKET_TOWER_NE].move_steps,
-		r_towers[ROCKET_TOWER_SW].move_steps,
-		r_towers[ROCKET_TOWER_SE].move_steps
+		r_towers[ROCKET_TOWER_NW].step_diff,
+		r_towers[ROCKET_TOWER_NE].step_diff,
+		r_towers[ROCKET_TOWER_SW].step_diff,
+		r_towers[ROCKET_TOWER_SE].step_diff
 		);
-	simulate_move_rocket_next_position();
+	move_rocket_next_position();
 }
 
 static void S_Test_Sanity_enter () {
@@ -925,13 +1052,37 @@ static void S_Test_Sanity_enter () {
 	jump_state("S_Main_Play");
 }
 
-/* do explicit calls and not function pointers to avoid Cloud9 debugger crashes */
+void S_Shutdown_enter () {
+	/* move the rocket to the default home position, for power off */
+	init_rocket_game(ROCKET_HOME_X, ROCKET_HOME_Y, ROCKET_HOME_Z, GAME_FUEL_NOLIMIT, GAME_GRAVITY_NONE,GAME_GO_HOME);
+	jump_state("S_Shutdown_Done");
+}
+
+/*
+ * state_callback: do explicit calls and not function pointers to avoid Cloud9 debugger crashes
+ *
+ */
+ 
 void state_callback(char *call_name) {
 	if      (ACTION_NOP == call_name)
 		return;
 
 	else if (0 == strcmp("S_Main_Play_enter",call_name))
 		S_Main_Play_enter();
+
+	else if (0 == strcmp("S_Start_Home_enter",call_name))
+		S_Start_Home_enter();
+	else if (0 == strcmp("S_Calibrate_enter",call_name))
+		S_Calibrate_enter();
+	else if (0 == strcmp("S_Calibrate_loop",call_name))
+		S_Calibrate_loop();
+	else if (0 == strcmp("S_Calibrate_Done_enter",call_name))
+		S_Calibrate_Done_enter();
+	else if (0 == strcmp("S_Calibrate_Status_enter",call_name))
+		S_Calibrate_Status_enter();
+		
+	else if (0 == strcmp("S_Test_Motor_Status_loop",call_name))
+		S_Test_Motor_Status_loop();
 
 	else if (0 == strcmp("S_Game_Start_enter",call_name))
 		S_Game_Start_enter();
@@ -1027,6 +1178,10 @@ void state_callback(char *call_name) {
 	else if (0 == strcmp("S_Test_LedRgb_exit",call_name))
 		S_Test_LedRgb_exit();
 
+	else if (0 == strcmp("S_TestMotor_NextSet_enter",call_name))
+		S_TestMotor_NextSet_enter();
+	else if (0 == strcmp("S_TestMotor_NextSet_Done_enter",call_name))
+		S_TestMotor_NextSet_Done_enter();
 	else if (0 == strcmp("S_TestMotor_PlusStep_enter",call_name))
 		S_TestMotor_PlusStep_enter();
 	else if (0 == strcmp("S_TestMotor_MinusStep_enter",call_name))
@@ -1058,6 +1213,9 @@ void state_callback(char *call_name) {
 	else if (0 == strcmp("S_Test_Sound_Next_enter",call_name))
 		S_Test_Sound_Next_enter();
 
+	else if (0 == strcmp("S_Shutdown_enter",call_name))
+		S_Shutdown_enter();
+
 	else log_val("ERROR: MISSING_CALLBACK=%s\n",call_name);
 
 }
@@ -1082,11 +1240,48 @@ void init_state () {
 	 STATE_FROM_CALLBACK,
 	 "  Rocket Lander!",
 //	 "1234567890123456",
-	 "I/O Inputs   Run",
-	 "S_IO_STATE","S_Main_Play",
+	 "I/O_Test   Start",
+	 "S_IO_STATE","S_Start",
 	 "S_Main_Play_enter",ACTION_NOP,ACTION_NOP);
 
 // Top Menus
+
+	StateGuiAdd("S_Start",
+	 STATE_NO_FLAGS,
+	 "Rocket Position?",
+//	 "1234567890123456",
+	 "Home   Calibrate",
+	 "S_Start_Home","S_Calibrate",
+	 ACTION_NOP,ACTION_NOP,ACTION_NOP);
+
+		StateGuiAdd("S_Start_Home",
+		 STATE_NO_VERBOSE,
+		 "",
+		 "",
+		 STATE_NOP,STATE_NOP,
+		 "S_Start_Home_enter",ACTION_NOP,ACTION_NOP);
+
+		StateGuiAdd("S_Calibrate",
+		 STATE_NO_VERBOSE,
+		 "Rocket Calibrate",
+	//	 "1234567890123456",
+		 "Done      Status",
+		 "S_Calibrate_Done","S_Calibrate_Status",
+		 "S_Calibrate_enter","S_Calibrate_loop",ACTION_NOP);
+
+			StateGuiAdd("S_Calibrate_Done",
+			 STATE_NO_FLAGS,
+			 "",
+			 "",
+			 STATE_NOP,STATE_NOP,
+			 "S_Calibrate_Done_enter",ACTION_NOP,ACTION_NOP);
+
+			StateGuiAdd("S_Calibrate_Status",
+			 STATE_NO_VERBOSE,
+			 "",
+			 "",
+			 STATE_NOP,STATE_NOP,
+			 "S_Calibrate_Status_enter",ACTION_NOP,ACTION_NOP);
 
 	StateGuiAdd("S_Main_Play",
 	 STATE_NO_FLAGS,
@@ -1137,8 +1332,31 @@ void init_state () {
 	 "  Rocket Lander!",
 //	 "1234567890123456",
 	 "Test        Next",
-	 "S_Test","S_Main_Play",
+	 "S_Test","S_Shutdown",
 	 ACTION_NOP,ACTION_NOP,ACTION_NOP);
+
+	StateGuiAdd("S_Shutdown",
+	 STATE_NO_FLAGS,
+	 "  Rocket Lander!",
+//	 "1234567890123456",
+	 "Shutdown    Next",
+	 "S_Shutdown_Select","S_Main_Play",
+	 ACTION_NOP,ACTION_NOP,ACTION_NOP);
+
+		StateGuiAdd("S_Shutdown_Select",
+		 STATE_NO_FLAGS,
+		 "",
+		 "",
+		 STATE_NOP,STATE_NOP,
+		 "S_Shutdown_enter",ACTION_NOP,ACTION_NOP);
+
+		StateGuiAdd("S_Shutdown_Done",
+		 STATE_FROM_CALLBACK,
+		 "SAFE TO TURN OFF",
+	//	 "1234567890123456",
+		 "Return to Main",
+		 "S_Main_Play","S_Main_Play",
+		 ACTION_NOP,ACTION_NOP,ACTION_NOP);
 
 
 // TOP: Options
@@ -1494,68 +1712,90 @@ void init_state () {
 	 "Test...         ",
 //	 "1234567890123456",
 	 "Motor_Test  Next",
-	 "S_TestMotor_PlusStep","S_Test_SanityTest",
+	 "S_TestMotor_NextSet","S_Test_SanityTest",
 	 ACTION_NOP,ACTION_NOP,ACTION_NOP);
+
+		StateGuiAdd("S_TestMotor_NextSet",
+		 STATE_NO_FLAGS,
+		 "Test Motor  +set",
+	//	 "1234567890123456",
+		 "Next        +set",
+		 "S_TestMotor_NextSet_Done","S_TestMotor_NextSet_Go",
+		 ACTION_NOP,ACTION_NOP,ACTION_NOP);
+
+			StateGuiAdd("S_TestMotor_NextSet_Go",
+			 STATE_NO_FLAGS,
+			 "",
+			 "",
+			 STATE_NOP,STATE_NOP,
+			 "S_TestMotor_NextSet_enter",ACTION_NOP,ACTION_NOP);
+
+			StateGuiAdd("S_TestMotor_NextSet_Done",
+			 STATE_NO_FLAGS,
+			 "",
+			 "",
+			 STATE_NOP,STATE_NOP,
+			 "S_TestMotor_NextSet_Done_enter",ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_TestMotor_PlusStep",
 		 STATE_FROM_CALLBACK,
-		 "Test Motor  +step",
+		 "Test Motor +step",
 	//	 "1234567890123456",
-		 "Next        +step",
+		 "Next       +step",
 		 "S_TestMotor_MinusStep","S_TestMotor_PlusStep_Go",
 		 ACTION_NOP,ACTION_NOP,ACTION_NOP);
 
-		StateGuiAdd("S_TestMotor_PlusStep_Go",
-		 STATE_NO_FLAGS,
-		 "",
-		 "",
-		 STATE_NOP,STATE_NOP,
-		 "S_TestMotor_PlusStep_enter",ACTION_NOP,ACTION_NOP);
+			StateGuiAdd("S_TestMotor_PlusStep_Go",
+			 STATE_NO_FLAGS,
+			 "",
+			 "",
+			 STATE_NOP,STATE_NOP,
+			 "S_TestMotor_PlusStep_enter",ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_TestMotor_MinusStep",
-		 STATE_FROM_CALLBACK,
+		 STATE_NO_FLAGS,
 		 "Test Motor  -step",
 	//	 "1234567890123456",
 		 "Next        -step",
 		 "S_TestMotor_Plus360","S_TestMotor_MinusStep_Go",
 		 ACTION_NOP,ACTION_NOP,ACTION_NOP);
 
-		StateGuiAdd("S_TestMotor_MinusStep_Go",
-		 STATE_NO_FLAGS,
-		 "",
-		 "",
-		 STATE_NOP,STATE_NOP,
-		 "S_TestMotor_MinusStep_enter",ACTION_NOP,ACTION_NOP);
+			StateGuiAdd("S_TestMotor_MinusStep_Go",
+			 STATE_NO_FLAGS,
+			 "",
+			 "",
+			 STATE_NOP,STATE_NOP,
+			 "S_TestMotor_MinusStep_enter",ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_TestMotor_Plus360",
-		 STATE_FROM_CALLBACK,
+		 STATE_NO_FLAGS,
 		 "Test Motor   +360",
 	//	 "1234567890123456",
 		 "Next         +360",
 		 "S_TestMotor_Minus360","S_TestMotor_Plus360_Go",
 		 ACTION_NOP,ACTION_NOP,ACTION_NOP);
 
-		StateGuiAdd("S_TestMotor_Plus360_Go",
-		 STATE_NO_FLAGS,
-		 "",
-		 "",
-		 STATE_NOP,STATE_NOP,
-		 "S_TestMotor_Plus360_enter",ACTION_NOP,ACTION_NOP);
+			StateGuiAdd("S_TestMotor_Plus360_Go",
+			 STATE_NO_FLAGS,
+			 "",
+			 "",
+			 STATE_NOP,STATE_NOP,
+			 "S_TestMotor_Plus360_enter",ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_TestMotor_Minus360",
-		 STATE_FROM_CALLBACK,
+		 STATE_NO_FLAGS,
 		 "Test Motor   -360",
 	//	 "1234567890123456",
 		 "Next         -360",
 		 "S_Main_Play","S_TestMotor_Minus360_Go",
 		 ACTION_NOP,ACTION_NOP,ACTION_NOP);
 
-		StateGuiAdd("S_TestMotor_Minus360_Go",
-		 STATE_NO_FLAGS,
-		 "",
-		 "",
-		 STATE_NOP,STATE_NOP,
-		 "S_TestMotor_Minus360_enter",ACTION_NOP,ACTION_NOP);
+			StateGuiAdd("S_TestMotor_Minus360_Go",
+			 STATE_NO_FLAGS,
+			 "",
+			 "",
+			 STATE_NOP,STATE_NOP,
+			 "S_TestMotor_Minus360_enter",ACTION_NOP,ACTION_NOP);
 
 	StateGuiAdd("S_Test_SanityTest",
 	 STATE_NO_FLAGS,
@@ -1632,17 +1872,25 @@ void init_state () {
 	 "Setup...",
 //	 "1234567890123456",
 	 "Calibrate   Next",
-	 "S_Calibrate_Select","S_Test_Antennae_test",
+	 "S_Calibrate","S_Test_Motor_Status",
 	 ACTION_NOP,ACTION_NOP,ACTION_NOP);
 
-		StateGuiAdd("S_Calibrate_Select",
-		 STATE_NO_FLAGS,
-		 "  <<< TO DO >>>",
-	//	 "1234567890123456",
-		 "Back            ",
-		 "S_Main_Play","S_Main_Play",
-		 ACTION_NOP,ACTION_NOP,ACTION_NOP);
+	StateGuiAdd("S_Test_Motor_Status",
+	 STATE_NO_FLAGS,
+	 "Setup...",
+//	 "1234567890123456",
+	 "Motor_State Next",
+	 "S_Test_Motor_Status_Select","S_Test_Antennae_test",
+	 ACTION_NOP,ACTION_NOP,ACTION_NOP);
 
+		StateGuiAdd("S_Test_Motor_Status_Select",
+		 STATE_NO_VERBOSE,
+		 "Motors at:  100%",
+	//	 "1234567890123456",
+		 "Done",
+		 "S_Main_Play","S_Main_Play",
+		 ACTION_NOP,"S_Test_Motor_Status_loop",ACTION_NOP);
+	
 	StateGuiAdd("S_Test_Antennae_test",
 	 STATE_NO_FLAGS,
 	 "Test...",
@@ -1789,7 +2037,10 @@ void init_state () {
 void state_loop() {
 	/* Process Buttons (default mode is toggle) */
 	if (r_control.button_a && r_control.button_b) {
-		goto_state("S_Init");
+		if (state_now == find_state("S_IO_STATE"))
+			goto_state("S_Init");
+		else
+			goto_state("S_Main_Play");
 	} else if (r_control.button_a && !r_control.button_a_prev) {
 		goto_state(state_array[state_now].k1);
 	} else if (r_control.button_b && !r_control.button_b_prev) {
