@@ -23,6 +23,7 @@
  *   - Each motor has a micro second timeout, at which time the next micro-step is taken
  *   - The timeout is calclualted for the number of steps needed for the coming timeframe
  *   - The timeframe is nominally 1/5 second, the time between updates from the main Rocket controller
+ *   - The motor is moved to low power when there is no activity via the STBY input
  * 
  * [I2C Handler]
  *   - There I2C messages are received from the main Rocket controller to control motion:
@@ -40,10 +41,11 @@
  *   
 */
 
-
 #include <Wire.h>
 #include <inttypes.h>
 #include "MicroAve.h"
+
+#include <Stepper.h>
 
 // General Enables
 #define ENABLE_I2C      1   // Enable the I2C slave mode
@@ -111,21 +113,29 @@ int32_t movement_display_counter = 0;  // coutdown pause delay
 //
 
 #define FRAMES_PER_SECOND        5  // 1/5 second, as per rocket control cpu
-#define USECONDS_PER_FRAME 200000L
-#define MOTOR_SPEED_MAX  (USECONDS_PER_FRAME/15)  // max steps per frame uSec timeout
+#define USECONDS_PER_FRAME 200000L  // 1/5 second
+#define MOTOR_SPEED_MAX       1250  // minimum step delay => maximum speed (mSec) = 240 rpm (NOTE:1000 mSec too fast for NEMA-17)
 #define MOTOR_SPEED_AUTO         0  // speed is auto-calculated per frame
-#define MOTOR_SPEED_SLOW       300  // usec per step
-#define MOTOR_SPEED_FAST       100  // usec per step
 #define MOTOR_DEST_MIN           0  // minimum step count
 #define MOTOR_DEST_MAX      78530L  // maximum step count = ((1000000 um) / (12.734 um per step))
 
-#define ROCKET_TOWER_STEPS_PER_UM10  785L  // 78.525 uM per step
+// Spindle: diameter = 8 mm, circumference = 3.141 * 8 mm = 25.128, uM/step = (25.128 * 1000)/200 = 125.64 uM/step
+#define ROCKET_TOWER_STEPS_PER_UM10  1256L  // 125.6 * 10 uMx10 per step (grab one more digit of integer math precision)
+#define UM10_PER_MILLIMETER          10000L // 1000  * 10 uMx10 per millimeter
+
+#define MOTOR_POWER_OFF       0   // value of PWM signal to motor STBY control pins
+#define MOTOR_POWER_ON      255   // STBY is full on
+#define MOTOR_POWER_LOW     128   // STBY is half on
+#define MOTOR_POWER_PIN      12   // power PWM output pin
+#define MOTOR_POWER_PIN_NULL  0   // power PWM output pin is undefined
+
 
 class Motor {
   public:
     // constructors:
     Motor(const char * name, uint16_t pin_a,uint16_t pin_b);
 
+    // member functions
     void displayStatus();
     void reset();
 
@@ -138,9 +148,13 @@ class Motor {
     void move_next(int32_t a,uint32_t speed);
     void step_loop(uint16_t u_sec_passed);
 
+    // static member functions
+    static void set_power(uint8_t request_power);
+
+    // member variables
     const char * name;        // name of this motor's tower
-    uint16_t pin_a;
-    uint16_t pin_b;
+    uint8_t pin_a;            // notor control A
+    uint8_t pin_b;            // notor control B
     
     int32_t step_location;    // current location of stepper motor, in steps
     int32_t step_destination; // goal location of stepper motor, in steps
@@ -159,13 +173,33 @@ class Motor {
 
     boolean enable_motion;       // stop or go
 
+    // static member variables
+    static uint8_t power_pwm;   // power value 100=full on, 0=full off
+    static uint8_t power_pin;  // pin for power control
+
   private:
 };
+
+// init static members
+uint8_t Motor::power_pwm=MOTOR_POWER_OFF;
+uint8_t Motor::power_pin=MOTOR_POWER_PIN_NULL;
 
 Motor::Motor(const char * name, uint16_t pin_a,uint16_t pin_b) {
   this->name = name;
   this->pin_a = pin_a;
   this->pin_b = pin_b;
+  
+  // set up the motor control output pins
+  pinMode(pin_a,OUTPUT);
+  pinMode(pin_b,OUTPUT);
+ 
+  // set the motor power pin (and preset the power off)
+  if (MOTOR_POWER_PIN_NULL == power_pin) {
+    power_pin = MOTOR_POWER_PIN;
+    power_pwm = MOTOR_POWER_OFF;
+    analogWrite(power_pin, power_pwm);
+  }
+    
   reset();
 }
 
@@ -182,8 +216,15 @@ void Motor::reset() {
   req_step_increment = 0; 
   req_step_location = 0;
   req_step_speed_timecount_max = 0;
-  // class variables
   enable_motion=true;
+}
+
+/* set the global motor power */
+void Motor::set_power(uint8_t request_power) {
+  if ((power_pwm != request_power) && (MOTOR_POWER_PIN_NULL != power_pin)) {
+    power_pwm=request_power;
+    analogWrite(power_pin, power_pwm);
+  }
 }
 
 /* set the motor's absolution location */
@@ -302,11 +343,23 @@ void Motor::step_loop(uint16_t u_sec_passed) {
       Serial.print(" Note: [");
       Serial.print(name);
       Serial.print("] step_speed_timecount_max is set to ");
-      Serial.println(step_speed_timecount_max);
+      Serial.print(step_speed_timecount_max);
+      Serial.print(" from ");
+      Serial.print(step_location);
+      Serial.print(" to ");
+      Serial.print(step_destination);
+      Serial.print(" diff= ");
+      Serial.println(abs(step_location-step_destination));
     }
   
     // reset countdown counter?
-//    step_speed_timecount = 0L;
+    step_speed_timecount = 0L;
+
+    // set the motors to full power
+    Motor::set_power(MOTOR_POWER_ON);
+
+    // catch the time diff next round
+    return;
   }  
 
   // has enough time passed for a step?
@@ -314,18 +367,14 @@ void Motor::step_loop(uint16_t u_sec_passed) {
   if ((enable_motion                                   ) &&
       (step_location        != step_destination        ) &&
       (step_speed_timecount >= step_speed_timecount_max) ) {
-    step_speed_timecount = step_speed_timecount - step_speed_timecount_max;
-
+    // step_speed_timecount = step_speed_timecount - step_speed_timecount_max;
+    step_speed_timecount = 0;
+    
     if (step_location < step_destination)
       step_location++;
     else
       step_location--;
 
-    if (false) {
-      Serial.print("Move step:");
-      Serial.println(step_location & 0x03L);
-    }
-    
     switch (step_location & 0x03L) {
       case 0:  // 1010
         digitalWrite(pin_a, LOW);
@@ -378,7 +427,7 @@ Motor motor_se("SE",TOWER_SE_A_PORT, TOWER_SE_B_PORT);
 
 void setup() {
   uint8_t i;
-  
+
   Serial.begin(9600);           // start serial for output
   delay(1000);
   Serial.println("Init Start...");
@@ -388,11 +437,6 @@ void setup() {
     Wire.begin(ROCKET_MOTOR_I2C_ADDRESS); // Set I2C slave address
     Wire.onReceive(receiveEvent); // register the I2C receive event
     Wire.onRequest(requestEvent); // register the I2C request event
-  }
-
-  // set up the motor control output pins
-  for (i=TOWER_PORT_MIN;i<=TOWER_PORT_MAX;i++) {
-    pinMode(i,OUTPUT);
   }
 
   Serial.println("Setup Done!");
@@ -492,10 +536,10 @@ void loop() {
         
     // move the motors forward one revolution
     if ('f' == char_in) {
-      motor_nw.move_next(100,MOTOR_SPEED_AUTO);
-      motor_ne.move_next(100,MOTOR_SPEED_AUTO);
-      motor_sw.move_next(100,MOTOR_SPEED_AUTO);
-      motor_se.move_next(100,MOTOR_SPEED_AUTO);
+      motor_nw.move_next(200,MOTOR_SPEED_AUTO);
+      motor_ne.move_next(200,MOTOR_SPEED_AUTO);
+      motor_sw.move_next(200,MOTOR_SPEED_AUTO);
+      motor_se.move_next(200,MOTOR_SPEED_AUTO);
     }
     
     // move the motors back one revolution
@@ -506,6 +550,73 @@ void loop() {
       motor_se.move_next(-200,MOTOR_SPEED_AUTO);
     }
 
+    // move the motors forward one revolution
+    if ('1' == char_in) {
+      motor_nw.move_next(100,10000);
+      motor_ne.move_next(100,10000);
+      motor_sw.move_next(100,10000);
+      motor_se.move_next(100,10000);
+    }
+    
+    // move the motors forward one revolution
+    if ('2' == char_in) {
+      motor_nw.move_next(100,20000);
+      motor_ne.move_next(100,20000);
+      motor_sw.move_next(100,20000);
+      motor_se.move_next(100,20000);
+    }
+    
+    // move the motors forward one revolution
+    if ('3' == char_in) {
+      motor_nw.move_next(200,5000);
+      motor_ne.move_next(200,5000);
+      motor_sw.move_next(200,5000);
+      motor_se.move_next(200,5000);
+    }
+
+    // move the motors forward one revolution
+    if ('4' == char_in) {
+      motor_nw.move_next(200,2500);
+      motor_ne.move_next(200,2500);
+      motor_sw.move_next(200,2500);
+      motor_se.move_next(200,2500);
+    }
+
+    // move the motors forward one revolution
+    if ('5' == char_in) {
+      motor_nw.move_next(200,1250);
+      motor_ne.move_next(200,1250);
+      motor_sw.move_next(200,1250);
+      motor_se.move_next(200,1250);
+    }
+
+    // move the motors forward one revolution
+    if ('6' == char_in) {
+      motor_nw.move_next(200,1000); // 1000 too fast!
+      motor_ne.move_next(200,1000);
+      motor_sw.move_next(200,1000);
+      motor_se.move_next(200,1000);
+    }
+
+    // increase the standby power
+    if ('p' == char_in) {
+      if (Motor::power_pwm > 255-16) Motor::power_pwm = 255-16; 
+      Motor::set_power(Motor::power_pwm + 16);
+      if (0 < verbose) {
+        Serial.print("** Power = ");
+        Serial.println(Motor::power_pwm);
+      }
+    }
+    // decrease the standby power
+    if ('P' == char_in) {
+      if (Motor::power_pwm < 16) Motor::power_pwm = 16;
+      Motor::set_power(Motor::power_pwm - 16);
+      if (0 < verbose) {
+        Serial.print("** Power = ");
+        Serial.println(Motor::power_pwm);
+      }
+    }
+    
     // goto high position
     if ('h' == char_in) {
       uint32_t destination = 11808;
@@ -577,28 +688,34 @@ void loop() {
   }
 
   // show status of recent activity
-  if (movement_display_counter && (0 < verbose)) {
+  if (movement_display_counter) {
     movement_display_counter -= usec_diff;
     if (0L >= movement_display_counter) {
-      // show steps
-      Serial.print("\n== Current: NW=");
-      Serial.print(motor_nw.step_location);
-      Serial.print(", NE=");
-      Serial.print(motor_ne.step_location);
-      Serial.print(", SW=");
-      Serial.print(motor_sw.step_location);
-      Serial.print(", SE=");
-      Serial.println(motor_se.step_location);
-      // show millimeters
-      Serial.print("         mm:NW=");
-      Serial.print((motor_nw.step_location * ROCKET_TOWER_STEPS_PER_UM10)/10000L);
-      Serial.print(", NE=");
-      Serial.print((motor_ne.step_location * ROCKET_TOWER_STEPS_PER_UM10)/10000L);
-      Serial.print(", SW=");
-      Serial.print((motor_sw.step_location * ROCKET_TOWER_STEPS_PER_UM10)/10000L);
-      Serial.print(", SE=");
-      Serial.println((motor_se.step_location * ROCKET_TOWER_STEPS_PER_UM10)/10000L);
-      movement_display_counter = 0L;
+
+      // set the motors to low power
+      Motor::set_power(MOTOR_POWER_OFF /* MOTOR_POWER_LOW */);
+
+      if (0 < verbose) {
+        // show steps
+        Serial.print("\n== Current: NW=");
+        Serial.print(motor_nw.step_location);
+        Serial.print(", NE=");
+        Serial.print(motor_ne.step_location);
+        Serial.print(", SW=");
+        Serial.print(motor_sw.step_location);
+        Serial.print(", SE=");
+        Serial.println(motor_se.step_location);
+        // show millimeters
+        Serial.print("         mm:NW=");
+        Serial.print((motor_nw.step_location * ROCKET_TOWER_STEPS_PER_UM10)/UM10_PER_MILLIMETER);
+        Serial.print(", NE=");
+        Serial.print((motor_ne.step_location * ROCKET_TOWER_STEPS_PER_UM10)/UM10_PER_MILLIMETER);
+        Serial.print(", SW=");
+        Serial.print((motor_sw.step_location * ROCKET_TOWER_STEPS_PER_UM10)/UM10_PER_MILLIMETER);
+        Serial.print(", SE=");
+        Serial.println((motor_se.step_location * ROCKET_TOWER_STEPS_PER_UM10)/UM10_PER_MILLIMETER);
+        movement_display_counter = 0L;
+      }
     }
   }
 
