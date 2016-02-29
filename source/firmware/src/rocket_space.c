@@ -33,9 +33,9 @@
  *
  */
  
-void rocket_position_send ();
-void rocket_command_send (uint8_t command);
-static void move_rocket_initial_position ();
+void rocket_position_send();
+void rocket_command_send(uint8_t command);
+static void move_rocket_position();
 static void set_rocket_position();
 
 /*
@@ -45,34 +45,47 @@ static void set_rocket_position();
 
 struct ROCKET_SPACE_S r_space;
 
+
 struct ROCKET_TOWER_S r_towers[ROCKET_TOWER_MAX] = {
     {
-        .pos_x       = ROCKET_TOWER_NW_X,
-        .pos_y       = ROCKET_TOWER_NW_Y,
-        .pos_z       = ROCKET_TOWER_NW_Z,
+        .pos_x       = X_POS_MIN,
+        .pos_y       = Y_POS_MAX,
+        .pos_z       = Z_POS_MAX,
+        .mount_pos_x = ROCKET_MOUNT_X_POS_MIN,
+	    .mount_pos_y = ROCKET_MOUNT_Y_POS_MAX,
+	    .mount_pos_z = ROCKET_MOUNT_Z_POS_MAX,
         .i2c_address = ROCKET_TOWER_NW_ADDR,
-        .spool_circ = 1
+        .speed = MOTOR_SPEED_AUTO
     },
     {
-        .pos_x       = ROCKET_TOWER_NE_X,
-        .pos_y       = ROCKET_TOWER_NE_Y,
-        .pos_z       = ROCKET_TOWER_NE_Z,
+        .pos_x       = X_POS_MAX,
+        .pos_y       = Y_POS_MAX,
+        .pos_z       = Z_POS_MAX,
+        .mount_pos_x = ROCKET_MOUNT_X_POS_MAX,
+	    .mount_pos_y = ROCKET_MOUNT_Y_POS_MAX,
+	    .mount_pos_z = ROCKET_MOUNT_Z_POS_MAX,
         .i2c_address = ROCKET_TOWER_NE_ADDR,
-        .spool_circ = 1
+        .speed = MOTOR_SPEED_AUTO
     },
     {
-        .pos_x       = ROCKET_TOWER_SW_X,
-        .pos_y       = ROCKET_TOWER_SW_Y,
-        .pos_z       = ROCKET_TOWER_SW_Z,
+        .pos_x       = X_POS_MIN,
+        .pos_y       = Y_POS_MIN,
+        .pos_z       = Z_POS_MAX,
+        .mount_pos_x = ROCKET_MOUNT_X_POS_MIN,
+	    .mount_pos_y = ROCKET_MOUNT_Y_POS_MIN,
+	    .mount_pos_z = ROCKET_MOUNT_Z_POS_MAX,
         .i2c_address = ROCKET_TOWER_SW_ADDR,
-        .spool_circ = 1
+        .speed = MOTOR_SPEED_AUTO
     },
     {
-        .pos_x       = ROCKET_TOWER_SE_X,
-        .pos_y       = ROCKET_TOWER_SE_Y,
-        .pos_z       = ROCKET_TOWER_SE_Z,
+        .pos_x       = X_POS_MAX,
+        .pos_y       = Y_POS_MIN,
+        .pos_z       = Z_POS_MAX,
+        .mount_pos_x = ROCKET_MOUNT_X_POS_MAX,
+	    .mount_pos_y = ROCKET_MOUNT_Y_POS_MIN,
+	    .mount_pos_z = ROCKET_MOUNT_Z_POS_MAX,
         .i2c_address = ROCKET_TOWER_SE_ADDR,
-        .spool_circ = 1
+        .speed = MOTOR_SPEED_AUTO
     },
 };
 
@@ -89,13 +102,6 @@ bool init_rocket_hardware () {
 	r_space.rocket_x = 0;			// current game-space rocket position, in uMeters
 	r_space.rocket_y = 0;
 	r_space.rocket_z = 0;
-
-	// Compute tower spool circumference
-	// ASSUME PI as (3.141 * 1000)/1000
-	r_towers[ROCKET_TOWER_NW].spool_circ = (ROCKET_TOWER_SPOOL_RADIUS * 3141)/1000;
-	r_towers[ROCKET_TOWER_NE].spool_circ = (ROCKET_TOWER_SPOOL_RADIUS * 3141)/1000;
-	r_towers[ROCKET_TOWER_SW].spool_circ = (ROCKET_TOWER_SPOOL_RADIUS * 3141)/1000;
-	r_towers[ROCKET_TOWER_SE].spool_circ = (ROCKET_TOWER_SPOOL_RADIUS * 3141)/1000;
 
 	// Initialize XYZ motor controls
 	if (IO_MOTOR_ENABLE) {
@@ -153,12 +159,15 @@ void init_rocket_game (int32_t pos_x, int32_t pos_y, int32_t pos_z, int32_t fuel
 	compute_rocket_cable_lengths();
 	
 	/* use set_rocket_position for motor test bring up */
-	// TODO ################
-	set_rocket_position();
-
-	// Move Rocket and wait until rocket is in position
-//	move_rocket_initial_position();
-	// TODO ################
+	if ((true || (GAME_AT_HOME == mode)) && (GAME_GO_HOME != mode)) {
+		// TODO ################
+		set_rocket_position();
+	}
+	if (false || (GAME_GO_HOME == mode)) {
+		// Move Rocket and wait until rocket is in position
+		move_rocket_position();
+		// TODO ################
+	}
 }
 
 
@@ -288,20 +297,13 @@ static void do_compute_cable_length(int32_t tower) {
 	int32_t x,y,z,length;
 
 	// we will use millimeters for the intermedate calculation to avoid overflow
-	x=(r_space.rocket_goal_x-r_towers[tower].pos_x)/1000;
-	y=(r_space.rocket_goal_y-r_towers[tower].pos_y)/1000;
-	z=(r_space.rocket_goal_z-r_towers[tower].pos_z)/1000;
+	x=(r_space.rocket_goal_x - r_towers[tower].pos_x + r_towers[tower].mount_pos_x)/1000;
+	y=(r_space.rocket_goal_y - r_towers[tower].pos_y + r_towers[tower].mount_pos_y)/1000;
+	z=(r_space.rocket_goal_z - r_towers[tower].pos_z + r_towers[tower].mount_pos_z)/1000;
 	r_towers[tower].length_goal = sqrt_with_accuracy((x*x)+(y*y)+(z*z),500)*1000;
 
 	// Calculate needed cable deployment change
 	length = r_towers[tower].length_goal - r_towers[tower].length;
-	// steps = l / (circ / 200) = (length * 200)/circ
-	r_towers[tower].move_steps = (length * ROCKET_TOWER_SPOOL_STEPS) / r_towers[ROCKET_TOWER_NW].spool_circ;
-
-	// Calculate needed cable deployment speed
-	// This is the speed to do the steps within the loop time of 200 mSec
-	// TODO ################
-	r_towers[tower].speed = 1;
 }
 
 void compute_rocket_cable_lengths ()
@@ -336,7 +338,7 @@ static void set_rocket_position ()
  *
  */
 
-static void move_rocket_initial_position ()
+static void move_rocket_position ()
  {
 	r_towers[ROCKET_TOWER_NW].step_count = (r_towers[ROCKET_TOWER_NW].length_goal*10L) / ROCKET_TOWER_STEPS_PER_UM10;
 	r_towers[ROCKET_TOWER_NE].step_count = (r_towers[ROCKET_TOWER_NW].length_goal*10L) / ROCKET_TOWER_STEPS_PER_UM10;
@@ -391,22 +393,28 @@ void move_rocket_next_position ()
  }
 
 /*
- * test_rocket_in_position : inform if rocket is in position
- *                           (e.g. at start position)
+ * query_rocket_progress : query and return progress of rocket motion (in percent)
  *
  */
 
-bool test_rocket_in_position ()
+uint8_t query_rocket_progress ()
  {
-	 // TODO ################ Refine
-
-	if ((r_space.rocket_x == r_space.rocket_goal_x) &&
-	    (r_space.rocket_y == r_space.rocket_goal_y) &&
-	    (r_space.rocket_z == r_space.rocket_goal_z) ) {
-		return true;
+	uint8_t buf[10];
+	uint32_t len = 1;
+	
+	if (IO_MOTOR_ENABLE) {
+		buf[0] = (uint8_t) 101;
+		i2c_read(i2c,buf,len,ROCKET_MOTOR_I2C_ADDRESS);
 	} else {
-		return false;
+		if ((r_space.rocket_x == r_space.rocket_goal_x) &&
+	    	(r_space.rocket_y == r_space.rocket_goal_y) &&
+	    	(r_space.rocket_z == r_space.rocket_goal_z) ) {
+			buf[0] = (uint8_t) 100;
+		} else {
+			buf[0] = (uint8_t) 50;
+		}
 	}
+	return(buf[0]);
  }
 
 /*
