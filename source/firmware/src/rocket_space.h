@@ -15,24 +15,34 @@
  *
  * </legal-notice>
  */
+ 
 
 // Dimensions of game mechanical space, in uMeters, referenced from game center
-// Assume a 0.50 meter square game space = 500000 uMeters
-#define X_POS_MIN -500000
-#define X_POS_MAX  500000
-#define Y_POS_MIN -500000
-#define Y_POS_MAX  500000
+// tower dimensions: 58 mm high, 48 mm wide, 34 mm deep
+#define X_POS_MIN -24000	// in uMeters ...
+#define X_POS_MAX  24000
+#define Y_POS_MIN -17000
+#define Y_POS_MAX  17000
 #define Z_POS_MIN  0
-#define Z_POS_MAX  1000000
+#define Z_POS_MAX  58000
 
 // Dimensions of game play space, in uMeters, referenced from game center
-// Assume a 0.50 meter square game space = 500000 uMeters
-#define GAME_X_POS_MIN -400000
-#define GAME_X_POS_MAX  400000
-#define GAME_Y_POS_MIN -400000
-#define GAME_Y_POS_MAX  400000
+// Assume 10mm from top, 5 mm from sides
+#define GAME_X_POS_MIN -19000	// in uMeters ...
+#define GAME_X_POS_MAX  9000
+#define GAME_Y_POS_MIN -12000
+#define GAME_Y_POS_MAX  12000
 #define GAME_Z_POS_MIN  0
-#define GAME_Z_POS_MAX  400000
+#define GAME_Z_POS_MAX  48000
+
+// Dimensions of game rocket, in uMeters, referenced from rocket center
+// rocket mount is 2.2 mm x 3.7 mm x 1.5 mm high
+#define ROCKET_MOUNT_X_POS_MIN -1100	// in uMeters ...
+#define ROCKET_MOUNT_X_POS_MAX  1100
+#define ROCKET_MOUNT_Y_POS_MIN -1750
+#define ROCKET_MOUNT_Y_POS_MAX  1750
+#define ROCKET_MOUNT_Z_POS_MIN  0
+#define ROCKET_MOUNT_Z_POS_MAX  1500
 
 // Scale of game space to real space
 // Assume one millimeter to 1 meter => moon space of ~1000 meters square
@@ -52,7 +62,6 @@
 #define THRUST_UMETER_INC_Y  5000/TIME_LOOPS_PER_SECOND
 #define THRUST_UMETER_INC_Z 10000/(JOYSTICK_Z_MAX-JOYSTICK_Z_MID)
 
-
 // Fuel Units
 // Assume 1 millimeter/second = 1 unit
 #define FUEL_SUPPLY_INIT 1000
@@ -70,36 +79,40 @@
 #define ROCKET_TOWER_MAX 4
 
 #define ROCKET_TOWER_NW_ADDR	0x80
-#define ROCKET_TOWER_NW_X		X_POS_MIN
-#define ROCKET_TOWER_NW_Y 		X_POS_MAX
-#define ROCKET_TOWER_NW_Z 		Z_POS_MAX
 #define ROCKET_TOWER_NW_SCALE   11
 
 #define ROCKET_TOWER_NE_ADDR	0x81
-#define ROCKET_TOWER_NE_X		X_POS_MIN
-#define ROCKET_TOWER_NE_Y 		X_POS_MIN
-#define ROCKET_TOWER_NE_Z 		Z_POS_MAX
 #define ROCKET_TOWER_NE_SCALE   11
 
 #define ROCKET_TOWER_SW_ADDR	0x82
-#define ROCKET_TOWER_SW_X		X_POS_MAX
-#define ROCKET_TOWER_SW_Y 		X_POS_MAX
-#define ROCKET_TOWER_SW_Z 		Z_POS_MAX
 #define ROCKET_TOWER_SW_SCALE   11
 
 #define ROCKET_TOWER_SE_ADDR	0x83
-#define ROCKET_TOWER_SE_X		X_POS_MAX
-#define ROCKET_TOWER_SE_Y 		X_POS_MIN
-#define ROCKET_TOWER_SE_Z 		Z_POS_MAX
 #define ROCKET_TOWER_SE_SCALE   11
 
+#define ROCKET_HOME_X	0		// this is the power off rocket step home position
+#define ROCKET_HOME_Y	0
+#define ROCKET_HOME_Z	0		// this could be negative to provide cable slack
+#define ROCKET_CALIBRATE_X	  0	// this is the calibration point rocket home position
+#define ROCKET_CALIBRATE_Y	  0
+#define ROCKET_CALIBRATE_Z	400	// this is the height of the rocket mount point
+								// TODO #################### MEASURE
+// Assume  Z full movement provides 10 millimeter/second
+#define ROCKET_CALIBRATE_INC_Z 10000/(JOYSTICK_Z_MAX-JOYSTICK_Z_MID)
+
 // Tower spool lengths
-// ASSUME spool radius of 5 mM = 5000 uM
+// ASSUME spool circumference of 8 mM = 8000 uM
 // ASSUME spool stepper count of 200
-// Results in step size of ((5000 uM * 3141)/1000)/200 = 15705/200 =  78.525 uM
-#define ROCKET_TOWER_SPOOL_RADIUS   5000L
-#define ROCKET_TOWER_SPOOL_STEPS     200L
-#define ROCKET_TOWER_STEPS_PER_UM10  785L	// 78.525 uM per step
+#define ROCKET_TOWER_SPOOL_CIRC   8000L
+#define ROCKET_TOWER_SPOOL_STEPS  200L
+
+// Spindle: diameter = 8 mm, circumference = 3.141 * 8 mm = 25.128, uM/step = (25.128 * 1000)/200 = 125.64 uM/step
+#define ROCKET_TOWER_STEPS_PER_UM10  1256L  // 125.6 * 10 uMx10 per step (grab one more digit of integer math precision)
+#define UM10_PER_MILLIMETER          10000L // 1000  * 10 uMx10 per millimeter
+
+// Motor speed: assume auto speed
+#define MOTOR_SPEED_AUTO         0  // speed is auto-calculated per frame
+
 
 // Exported Structures and Funtions
 
@@ -110,14 +123,16 @@ struct ROCKET_TOWER_S {
 	int32_t	pos_y;
 	int32_t	pos_z;
 
+	int32_t	mount_pos_x;	// offset of rouck mount point
+	int32_t	mount_pos_y;
+	int32_t	mount_pos_z;
+
 	int32_t	length;			// string deploy length current
 	int32_t	length_goal;	// string deploy length goal
 
 	int32_t	step_count;		// calculated tower motor step count
 	int32_t	step_diff;		// next tower motor step move
 
-	int32_t	spool_circ;		// stepper's spool circumference in uM, to be divided by step size
-	int32_t	move_steps;		// step count to move stepper
 	int32_t	speed;			// stepper motor speed
 };
 
@@ -159,11 +174,11 @@ void compute_rocket_next_position();
 void compute_rocket_cable_lengths();
 void move_rocket_next_position();
 void simulate_move_rocket_next_position();
-bool test_rocket_in_position();
-void rocket_increment_send (int32_t increment_nw, int32_t increment_ne, int32_t increment_sw, int32_t increment_se);
+uint8_t query_rocket_progress();
+void rocket_increment_send(int32_t increment_nw, int32_t increment_ne, int32_t increment_sw, int32_t increment_se);
 
-void rocket_position_send ();
-void rocket_command_send (uint8_t command);
+void rocket_position_send();
+void rocket_command_send(uint8_t command);
 
 int32_t sqrt_with_accuracy(int32_t x, int32_t init_guess);
 
