@@ -37,13 +37,12 @@
 
 // Dimensions of game rocket, in uMeters, referenced from rocket center
 // rocket mount is 2.2 mm x 3.7 mm x 1.5 mm high
-#define ROCKET_MOUNT_X_POS_MIN -1100	// in uMeters ...
-#define ROCKET_MOUNT_X_POS_MAX  1100
-#define ROCKET_MOUNT_Y_POS_MIN -1750
-#define ROCKET_MOUNT_Y_POS_MAX  1750
-#define ROCKET_MOUNT_Z_POS_MIN  0
-#define ROCKET_MOUNT_Z_POS_MAX  1500
-
+#define ROCKET_MOUNT_X_POS_MIN -11000	// in uMeters ...
+#define ROCKET_MOUNT_X_POS_MAX  11000
+#define ROCKET_MOUNT_Y_POS_MIN -17500
+#define ROCKET_MOUNT_Y_POS_MAX  17500
+#define ROCKET_MOUNT_Z_POS_MIN      0
+#define ROCKET_MOUNT_Z_POS_MAX  15000
 // Scale of game space to real space
 // Assume one millimeter to 1 meter => moon space of ~1000 meters square
 #define SCALE_GAME_UMETER_TO_MOON_METER 1000
@@ -79,24 +78,17 @@
 #define ROCKET_TOWER_MAX 4
 
 #define ROCKET_TOWER_NW_ADDR	0x80
-#define ROCKET_TOWER_NW_SCALE   11
-
 #define ROCKET_TOWER_NE_ADDR	0x81
-#define ROCKET_TOWER_NE_SCALE   11
-
 #define ROCKET_TOWER_SW_ADDR	0x82
-#define ROCKET_TOWER_SW_SCALE   11
-
 #define ROCKET_TOWER_SE_ADDR	0x83
-#define ROCKET_TOWER_SE_SCALE   11
 
-#define ROCKET_HOME_X	0		// this is the power off rocket step home position
-#define ROCKET_HOME_Y	0
-#define ROCKET_HOME_Z	0		// this could be negative to provide cable slack
+#define ROCKET_HOME_X         0 // this is the power off rocket step home position
+#define ROCKET_HOME_Y         0
+#define ROCKET_HOME_Z     -5000 // this is negative to provide cable slack (in um)
 #define ROCKET_CALIBRATE_X	  0	// this is the calibration point rocket home position
 #define ROCKET_CALIBRATE_Y	  0
-#define ROCKET_CALIBRATE_Z	400	// this is the height of the rocket mount point
-								// TODO #################### MEASURE
+#define ROCKET_CALIBRATE_Z	  0
+								
 // Assume  Z full movement provides 10 millimeter/second
 #define ROCKET_CALIBRATE_INC_Z 10000/(JOYSTICK_Z_MAX-JOYSTICK_Z_MID)
 
