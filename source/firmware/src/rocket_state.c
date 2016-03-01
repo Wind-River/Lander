@@ -194,7 +194,13 @@ static void S_Start_Home_enter () {
 	jump_state("S_Main_Play");
 }
 
+
+/**** CALIBRATION ********************************************************/
+
 static void S_Calibrate_enter () {
+	// self-test mode?
+	if (self_test) return;
+
 	// tell the motors to pretend that they are game start position, to avoid step limits 
 	init_rocket_game(0, 0, Z_POS_MAX/2, GAME_FUEL_NOLIMIT, GAME_GRAVITY_NONE,GAME_AT_HOME);
 }
@@ -202,6 +208,9 @@ static void S_Calibrate_enter () {
 static void S_Calibrate_loop () {
 	int32_t nw_inc=0,ne_inc=0,sw_inc=0,se_inc=0;
 	int32_t x_delta,y_delta,z_delta;
+
+	// self-test mode?
+	if (self_test) return;
 
 	// Thruster Z is 'proportion-up or 'proportion-down' or 'off'
 	z_delta = r_control.analog_z - JOYSTICK_Z_MID;
@@ -254,6 +263,9 @@ static void S_Calibrate_loop () {
 }
 
 static void S_Calibrate_Done_enter () {
+	// self-test mode?
+	if (self_test) return;
+
 	init_rocket_game(ROCKET_CALIBRATE_X, ROCKET_CALIBRATE_Y, ROCKET_CALIBRATE_Z, GAME_FUEL_NOLIMIT, GAME_GRAVITY_NONE,GAME_AT_HOME);
 	jump_state("S_Main_Play");
 }
@@ -276,12 +288,22 @@ static void S_Test_Motor_Status_loop () {
 	uint8_t buf[10];
 	uint32_t len = 1;
 	buf[0] = (uint8_t) '?';
+
+	// self-test mode?
+	if (self_test) return;
+
 	i2c_read(i2c,buf,len,ROCKET_MOTOR_I2C_ADDRESS);
 	sprintf(state_array[state_now].display_1,"Status=%4d",buf[0]);
 	display_state();
 }
 
+
+/**** GAME PLAY ********************************************************/
+
 static void updateLedDisplays () {
+	// self-test mode?
+	if (self_test) return;
+
 	// show fuel
 	send_LED_Backpack(r_space.rocket_fuel);
 	// show height
@@ -302,33 +324,44 @@ static void updateLedDisplays () {
 	}
 }
 
-
 static void S_Main_Play_enter () {
+	// self-test mode?
+	if (self_test) return;
+
 	send_Sound(SOUND_READY);
 	send_NeoPixel(NEOPIXEL_READY);
 }
 
 static void S_Game_Start_enter () {
-	init_game ();
+	// self-test mode?
+	if (self_test) return;
+
+	init_game();
 
 	// start the show
-	if (SAFE_UMETER_PER_SECOND < abs(r_space.rocket_delta_z)) {
-		send_Sound(SOUND_DANGER);
-		send_NeoPixel(NEOPIXEL_DANGER);
-	} else {
-		send_Sound(SOUND_PLAY);
-		send_NeoPixel(NEOPIXEL_PLAY);
-	}
+	send_Sound(SOUND_PLAY);
+	send_NeoPixel(NEOPIXEL_PLAY);
 	updateLedDisplays();
+}
 
-	jump_state("S_Game_Play");
+static void S_Game_Start_loop () {
+	// self-test mode?
+	if (self_test) return;
+
+	uint8_t position_status = query_rocket_progress();
+	sprintf(state_array[state_now].display_1,"Progress=%4d",position_status);
+	display_state();
+	if (100 == position_status) {
+		// we are done moving
+		jump_state("S_Game_Play");
+	}
 }
 
 static void S_Game_Play_loop () {
 
 	// self-test mode?
 	if (self_test) return;
-
+	
 	// compute the rocket position
 	compute_rocket_next_position();
 
@@ -420,7 +453,7 @@ static void S_Game_Display_Next_enter () {
 }
 
 
-// Select
+/**** GAME OPTIONS SELECT ***************************************************/
 
 static void S_Opt_Game_Z_Enter () {
 	r_game.game = GAME_Z_LAND;
@@ -483,6 +516,8 @@ static void S_Opt_Pos_Random_Enter () {
 }
 
 
+/**** TEST FUNCTIONS ********************************************************/
+
 static void S_Test_enter () {
 	// self-test mode?
 	if (self_test) return;
@@ -512,6 +547,9 @@ static void S_IO_STATE_loop () {
 	log(buffer);
 }
 
+
+/**** TEST I2C to Rocket_Display ****************************************************/
+
 static void S_Test_I2C_enter () {
 	char *msg = "x";
 	static uint8_t x = 0;
@@ -524,7 +562,7 @@ static void S_Test_I2C_enter () {
 	buf[strlen(msg)]=x;
 
 	PRINT("FOO\n");
-	send_I2c_slave (buf, strlen(msg)+1);
+	send_I2c_slave(buf, strlen(msg)+1);
 	PRINT("BAR\n");
 
 	x++;
@@ -540,7 +578,8 @@ static void S_Test_I2C_enter () {
 	jump_state("S_Test_I2C_Select");
 }
 
-/* 7-segment Backpack LED display support */
+
+/**** TEST LARGE 7-SEGMENT  ********************************************************/
 
 static void S_Test_Segment_Open_enter () {
 	// self-test mode?
@@ -568,7 +607,8 @@ static void S_Test_Segment_enter () {
 }
 
 
-/* Simulation support */
+/**** TEST GAME SIMULATION  ********************************************************/
+
 static int32_t title_loop=0;
 static char* resume_state_name="S_Main_Play";
 static void do_Simulation_Pause_enter () {
@@ -721,6 +761,7 @@ static void S_Test_Simulation_Steps_loop () {
 }
 
 
+/**** TEST PAN/TILT ********************************************************/
 
 static int32_t antennae_number=0;
 static int32_t antennae_pan=(PAN_MID)*4;
@@ -764,6 +805,8 @@ static void S_Test_Antennae_Next_enter () {
 	jump_state("S_Test_Antennae");
 }
 
+/**** TEST LED-RGB ********************************************************/
+
 static int32_t ledrgb=0;
 static void S_Test_LedRgb_enter () {
 	ledrgb=0;
@@ -789,34 +832,8 @@ static void S_Test_LedRgb_exit () {
 	// turn LED RGB off
 }
 
-static int32_t tower_number=0;
-static void S_Test_Tower_Select_enter () {
-	tower_number=0;
-	jump_state("S_Test_Tower");
-}
-static void S_Test_Tower_enter () {
-	// initialize current motor
-}
-static void S_Test_Tower_loop () {
-	// self-test mode?
-	if (self_test) return;
 
-	// pass Z to current motor's speed
-	sprintf(buffer,"[Motor %d] Z=%3d M=???\n",
-		tower_number,
-		r_control.analog_z - JOYSTICK_Z_MID
-		);
-	log(buffer);
-}
-static void S_Test_Tower_exit () {
-	// stop current motor
-}
-static void S_Test_Tower_Next_enter () {
-	tower_number++;
-	if (tower_number>4)
-		tower_number=0;
-	jump_state("S_Test_Tower");
-}
+/**** TEST SOUNDS ********************************************************/
 
 static int32_t sound_number=0;
 static void S_Test_Sound_Select_enter () {
@@ -855,6 +872,9 @@ static void S_Test_Sound_Next_enter () {
 		sound_number=0;
 	jump_state("S_Test_Sound");
 }
+
+
+/**** TEST MOTOR STEPPING ********************************************************/
 
 static uint32_t motor_nextset_value=1L;
 static void test_set_motor_position(uint32_t motor_position) {
@@ -897,6 +917,8 @@ static void S_TestMotor_Minus360_enter () {
 	jump_state("S_TestMotor_Minus360");
 }
 
+
+/**** TEST CABLE CALCULATIONS ********************************************************/
 
 void cable_calc_test(char *msg, int32_t x, int32_t y) {
 	int32_t i;
@@ -948,6 +970,9 @@ void cable_steps_move(int32_t x, int32_t y, int32_t z) {
 		);
 	move_rocket_next_position();
 }
+
+
+/**** TEST STATE SANITY ********************************************************/
 
 static void S_Test_Sanity_enter () {
 	int32_t i,j;
@@ -1052,14 +1077,27 @@ static void S_Test_Sanity_enter () {
 	jump_state("S_Main_Play");
 }
 
+
+/**** SHUTDOWN ********************************************************/
+
 void S_Shutdown_enter () {
 	/* move the rocket to the default home position, for power off */
 	init_rocket_game(ROCKET_HOME_X, ROCKET_HOME_Y, ROCKET_HOME_Z, GAME_FUEL_NOLIMIT, GAME_GRAVITY_NONE,GAME_GO_HOME);
-	jump_state("S_Shutdown_Done");
 }
 
+void S_Shutdown_loop () {
+	uint8_t position_status = query_rocket_progress();
+	sprintf(state_array[state_now].display_1,"Progress=%4d",position_status);
+	display_state();
+	if (100 == position_status) {
+		// we are done moving
+		goto_state("S_Shutdown_Done");
+	}
+}
+
+
 /*
- * state_callback: do explicit calls and not function pointers to avoid Cloud9 debugger crashes
+ * state_callback: do explicit calls and not via function pointers to avoid Cloud9 debugger crashes
  *
  */
  
@@ -1086,6 +1124,8 @@ void state_callback(char *call_name) {
 
 	else if (0 == strcmp("S_Game_Start_enter",call_name))
 		S_Game_Start_enter();
+	else if (0 == strcmp("S_Game_Start_loop",call_name))
+		S_Game_Start_loop();		
 	else if (0 == strcmp("S_Game_Play_loop",call_name))
 		S_Game_Play_loop();
 	else if (0 == strcmp("S_Game_Done_enter",call_name))
@@ -1191,17 +1231,6 @@ void state_callback(char *call_name) {
 	else if (0 == strcmp("S_TestMotor_Minus360_enter",call_name))
 		S_TestMotor_Minus360_enter();
 
-	else if (0 == strcmp("S_Test_Tower_Select_enter",call_name))
-		S_Test_Tower_Select_enter();
-	else if (0 == strcmp("S_Test_Tower_enter",call_name))
-		S_Test_Tower_enter();
-	else if (0 == strcmp("S_Test_Tower_loop",call_name))
-		S_Test_Tower_loop();
-	else if (0 == strcmp("S_Test_Tower_exit",call_name))
-		S_Test_Tower_exit();
-	else if (0 == strcmp("S_Test_Tower_Next_enter",call_name))
-		S_Test_Tower_Next_enter();
-
 	else if (0 == strcmp("S_Test_Sound_Select_enter",call_name))
 		S_Test_Sound_Select_enter();
 	else if (0 == strcmp("S_Test_Sound_enter",call_name))
@@ -1215,6 +1244,8 @@ void state_callback(char *call_name) {
 
 	else if (0 == strcmp("S_Shutdown_enter",call_name))
 		S_Shutdown_enter();
+	else if (0 == strcmp("S_Shutdown_loop",call_name))
+		S_Shutdown_loop();
 
 	else log_val("ERROR: MISSING_CALLBACK=%s\n",call_name);
 
@@ -1294,9 +1325,17 @@ void init_state () {
 		StateGuiAdd("S_Game_Start",
 		 STATE_NO_VERBOSE,
 		 "",
+		 "          Cancel",
+		 STATE_NOP,"S_Game_Done",
+		 "S_Game_Start_enter","S_Game_Start_loop",ACTION_NOP);
+
+		StateGuiAdd("S_Game_Position",
+		 STATE_NO_FLAGS,
 		 "",
-		 STATE_NOP,STATE_NOP,
-		 "S_Game_Start_enter",ACTION_NOP,ACTION_NOP);
+	//	 "1234567890123456",
+		 "          Cancel",
+		 STATE_NOP,"S_Game_Done",
+		 "S_Shutdown_enter","S_Shutdown_loop",ACTION_NOP);
 
 		StateGuiAdd("S_Game_Play",
 		 STATE_NO_VERBOSE,
@@ -1346,9 +1385,10 @@ void init_state () {
 		StateGuiAdd("S_Shutdown_Select",
 		 STATE_NO_FLAGS,
 		 "",
-		 "",
-		 STATE_NOP,STATE_NOP,
-		 "S_Shutdown_enter",ACTION_NOP,ACTION_NOP);
+	//	 "1234567890123456",
+		 "          Cancel",
+		 STATE_NOP,"S_Shutdown_Done",
+		 "S_Shutdown_enter","S_Shutdown_loop",ACTION_NOP);
 
 		StateGuiAdd("S_Shutdown_Done",
 		 STATE_FROM_CALLBACK,
@@ -1926,7 +1966,7 @@ void init_state () {
 	 "Test...",
 //	 "1234567890123456",
 	 "LED_RGB     Next",
-	 "S_Test_LedRgb_Select","S_Test_Tower_test",
+	 "S_Test_LedRgb_Select","S_Test_Sound_test",
 	 ACTION_NOP,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Test_LedRgb_Select",
@@ -1936,36 +1976,6 @@ void init_state () {
 		 "Exit",
 		 "S_Test","S_Test",
 		 "S_Test_LedRgb_enter","S_Test_LedRgb_loop","S_Test_LedRgb_exit");
-
-	StateGuiAdd("S_Test_Tower_test",
-	 STATE_NO_FLAGS,
-	 "Test...",
-//	 "1234567890123456",
-	 "Tower_Motor Next",
-	 "S_Test_Tower_Select","S_Test_Sound_test",
-	 ACTION_NOP,ACTION_NOP,ACTION_NOP);
-
-		StateGuiAdd("S_Test_Tower_Select",
-		 STATE_NO_FLAGS,
-		 "",
-		 "",
-		 STATE_NOP,STATE_NOP,
-		 "S_Test_Tower_Select_enter",ACTION_NOP,ACTION_NOP);
-
-		StateGuiAdd("S_Test_Tower",
-		 STATE_FROM_CALLBACK,
-	 	 "Test Tower Motor",
-	//	 "1234567890123456",
-		 "Exit  Next_Motor",
-		 "S_Test","S_Test_Tower_Next",
-		 "S_Test_Tower_enter","S_Test_Tower_loop","S_Test_Tower_exit");
-
-		StateGuiAdd("S_Test_Tower_Next",
-		 STATE_NO_FLAGS,
-		 "",
-		 "",
-		 STATE_NOP,STATE_NOP,
-		 "S_Test_Tower_Next_enter",ACTION_NOP,ACTION_NOP);
 
 	StateGuiAdd("S_Test_Sound_test",
 	 STATE_NO_FLAGS,
