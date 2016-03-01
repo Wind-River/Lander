@@ -144,6 +144,12 @@ void init_rocket_game (int32_t pos_x, int32_t pos_y, int32_t pos_z, int32_t fuel
 	r_space.rocket_goal_y = pos_y;
 	r_space.rocket_goal_z = pos_z;
 
+	if (GAME_AT_HOME == mode) {
+		r_space.rocket_x = pos_x;		// preset current game-space rocket position, in uMeters
+		r_space.rocket_y = pos_y;
+		r_space.rocket_z = pos_z;
+	}
+
 	r_space.rocket_delta_x = 0;		// current game-space rocket speed, in uMeters
 	r_space.rocket_delta_y = 0;
 	r_space.rocket_delta_z = 0;
@@ -274,15 +280,22 @@ void compute_rocket_next_position ()
  *
  */
 
+static int sqrt_cnt=0;	// loop protection counter
+
 // Newton-Raphson method
 int32_t sqrt_with_accuracy(int32_t x, int32_t init_guess)
 {	int32_t next_guess;
 
+	if (++sqrt_cnt > 20) {
+		PRINT("#############SQRT_TOOMANY(%ld,%ld\n",x,init_guess);
+		return init_guess;
+	}
+	
 	// if we reach 0=init_guess, then the number and answer is zero
 	if (0 == init_guess) return 0;
 
 	next_guess = (init_guess + (x/init_guess))/2;
-	if (abs(init_guess - next_guess) < 1)
+	if (abs(init_guess - next_guess) < 2)
 		return(next_guess);
 	else
 		return(sqrt_with_accuracy(x, next_guess));
@@ -295,6 +308,8 @@ int32_t sqrt_with_accuracy(int32_t x, int32_t init_guess)
 
 static void do_compute_cable_length(int32_t tower) {
 	int32_t x,y,z,length;
+
+	sqrt_cnt=0;
 
 	// we will use millimeters for the intermedate calculation to avoid overflow
 	x=(r_space.rocket_goal_x - r_towers[tower].pos_x + r_towers[tower].mount_pos_x)/1000;
@@ -437,7 +452,6 @@ void rocket_increment_send (int32_t increment_nw, int32_t increment_ne, int32_t 
 	buf[8]=(uint8_t) ((increment_se & 0x0000ffL)     );
 
 	i2c_polling_write (i2c, buf, 9, ROCKET_MOTOR_I2C_ADDRESS);
-
  }
 
 /*
