@@ -55,6 +55,11 @@
 #define ROCKET_MOTOR_I2C_ADDRESS 19
 #define I2C_READ_MAX 20
 
+/* request read commands */
+#define REQUEST_COMMAND      '?'  // set the request mode
+#define REQUEST_MOVE_STATUS  's'  // return status
+#define REQUEST_POSITION     'p'  // return position
+
 //
 // which Arduino
 //
@@ -108,6 +113,9 @@ uint8_t verbose = 1;  // verbose level: 0=off, 1=ping, 2=I2C,motor updates
 #define MOVEMENT_DISPLAY_COUNT 3000000L
 int32_t movement_display_counter = 0;  // coutdown pause delay
 
+/* Request command mode */
+uint8_t request_command = REQUEST_MOVE_STATUS;
+
 //
 // motor class
 //
@@ -116,19 +124,26 @@ int32_t movement_display_counter = 0;  // coutdown pause delay
 #define USECONDS_PER_FRAME 200000L  // 1/5 second
 #define MOTOR_SPEED_MAX       1250  // minimum step delay => maximum speed (mSec) = 240 rpm (NOTE:1000 mSec too fast for NEMA-17)
 #define MOTOR_SPEED_AUTO         0  // speed is auto-calculated per frame
-#define MOTOR_DEST_MIN           0  // minimum step count
-#define MOTOR_DEST_MAX      78530L  // maximum step count = ((1000000 um) / (12.734 um per step))
 
-// Spindle: diameter = 8 mm, circumference = 3.141 * 8 mm = 25.128, uM/step = (25.128 * 1000)/200 = 125.64 uM/step
+/* Step max: top of tower to opposite tower base
+  * a = 580 mm
+  * b = sqrt(480^2 + 340^2) = 588.2 mm
+  * c = sqrt(580^2 + 588.2^2) = 826 mm
+  * s = (826 mm * 1000 um/mm) / 125.64 uM/step = 6575 steps = 33 turns = 8 seconds
+ */
+#define MOTOR_DEST_MAX      6575L  // maximum step count 
+#define MOTOR_DEST_MIN          0  // minimum step count
+
+/* Spindle: diameter = 8 mm, circumference = 3.141 * 8 mm = 25.128, uM/step = (25.128 * 1000)/200 = 125.64 uM/step */
 #define ROCKET_TOWER_STEPS_PER_UM10  1256L  // 125.6 * 10 uMx10 per step (grab one more digit of integer math precision)
 #define UM10_PER_MILLIMETER          10000L // 1000  * 10 uMx10 per millimeter
 
+/* motor controller power */
 #define MOTOR_POWER_OFF       0   // value of PWM signal to motor STBY control pins
 #define MOTOR_POWER_ON      255   // STBY is full on
 #define MOTOR_POWER_LOW     128   // STBY is half on
 #define MOTOR_POWER_PIN      12   // power PWM output pin
 #define MOTOR_POWER_PIN_NULL  0   // power PWM output pin is undefined
-
 
 class Motor {
   public:
@@ -144,7 +159,9 @@ class Motor {
     void move_preset();
     void move_destination();
     void set_location(uint32_t request_location,uint32_t request_speed);
-   
+
+    boolean moveRequestPending();
+
     void move_next(int32_t a,uint32_t speed);
     void step_loop(uint16_t u_sec_passed);
 
@@ -233,7 +250,7 @@ void Motor::set_location(uint32_t request_location,uint32_t request_speed) {
   req_step_speed_timecount_max = request_speed;
 
   if (verbose > 1) {
-    Serial.print("Set_Location[");
+    Serial.print("Set_Request_Location[");
     Serial.print(name);
     Serial.print("]=");
     Serial.print(request_location);
@@ -303,10 +320,18 @@ void Motor::step_loop(uint16_t u_sec_passed) {
     step_location    = req_step_location;   
     step_destination = req_step_location;   
     movement_display_counter = MOVEMENT_DISPLAY_COUNT;
+  } else if (request_move) {
+    if (0 == req_step_increment) {
+      /* no move if there is no increment */
+      request_move = false;
+    }
   } else if (request_destination) {
     request_destination = false;
     step_destination = req_step_location; 
-    request_move = true;
+    if (step_destination != step_location) {
+      /* move only if we are not already there */
+      request_move = true;
+    }
     movement_display_counter = MOVEMENT_DISPLAY_COUNT;
   }
   
@@ -319,7 +344,7 @@ void Motor::step_loop(uint16_t u_sec_passed) {
       // (re)start the activity display coutdown
       movement_display_counter = MOVEMENT_DISPLAY_COUNT;
     }
-    
+
     // test limits
     if (step_destination < MOTOR_DEST_MIN)
       step_destination = MOTOR_DEST_MIN;
@@ -357,7 +382,7 @@ void Motor::step_loop(uint16_t u_sec_passed) {
 
     // set the motors to full power
     Motor::set_power(MOTOR_POWER_ON);
-
+  
     // catch the time diff next round
     return;
   }  
@@ -396,6 +421,10 @@ void Motor::step_loop(uint16_t u_sec_passed) {
   }
 }
 
+boolean Motor::moveRequestPending() {
+    return (request_move || request_preset || request_destination);
+}
+
 void Motor::displayStatus() {
   Serial.print("Motor : ");
   Serial.print(name);
@@ -406,11 +435,11 @@ void Motor::displayStatus() {
   Serial.print(") location=0x");
   Serial.print(step_location,HEX);
   Serial.print(",");
-  Serial.print(step_location >> 2);
+  Serial.print(step_location);
   Serial.print(" steps, dest=0x");
   Serial.print(step_destination,HEX);
   Serial.print(",");
-  Serial.print(step_destination >> 2);
+  Serial.print(step_destination);
   Serial.print(" steps, speed:");
   Serial.print(step_speed_timecount_max);
   Serial.println(" mSec");
@@ -454,7 +483,7 @@ void show_help() {
   Serial.println("  f : advance motors one revolution");
   Serial.println("  b : advance motors one revolution");
   Serial.println("  h : goto high position");
-  Serial.println("  l : goto low position");
+  Serial.println("  l : goto low position (home)");
   Serial.println("  v : toggle the verbose level (default: 0=off)");
   Serial.println("");
 }
@@ -619,7 +648,8 @@ void loop() {
     
     // goto high position
     if ('h' == char_in) {
-      uint32_t destination = 11808;
+      // ((240,170,580) to (0,0,480) (mm) = 310.6 mm = (310644 um / 125.6 um_per_step) = 2473.3 steps
+      uint32_t destination = 2473;
       motor_nw.set_location(destination,MOTOR_SPEED_AUTO);
       motor_ne.set_location(destination,MOTOR_SPEED_AUTO);
       motor_sw.set_location(destination,MOTOR_SPEED_AUTO);
@@ -632,7 +662,8 @@ void loop() {
 
     // goto low position
     if ('l' == char_in) {
-      uint32_t destination = 15592;
+      // ((240,170,580) to (0,0,0) (mm) = 554.7 mm = (554700 um / 125.6 um_per_step) = 4416.4 steps
+      uint32_t destination = 4416;
       motor_nw.set_location(destination,MOTOR_SPEED_AUTO);
       motor_ne.set_location(destination,MOTOR_SPEED_AUTO);
       motor_sw.set_location(destination,MOTOR_SPEED_AUTO);
@@ -642,6 +673,9 @@ void loop() {
       motor_sw.move_destination();
       motor_se.move_destination();
     }
+
+    /* NOTE: 4416 - 2473 = 1943 steps @ 800 steps/second = 2.5 seconds move = 9.7 turns */
+    
     // test available integer types
     if ('y' == char_in) {
       uint8_t my_byte= 1;
@@ -838,6 +872,16 @@ void receiveEvent(int16_t howMany) {
         motor_se.set_location(req_step_location,MOTOR_SPEED_AUTO);
       }
     }  
+
+    // Set next request mode 
+    if ('?' == (char) buffer[0]) {
+      request_command = buffer[1];
+      if (verbose > 1) {
+        Serial.print("*** I2C Next Request Mode=");
+        Serial.println((char) request_command);
+      }
+    }
+  
   }
 
   if (ENABLE_TIMING) ave_i2c.setStop();
@@ -845,27 +889,62 @@ void receiveEvent(int16_t howMany) {
 }
 
 void requestEvent() {
-  uint8_t b;
+  uint8_t buffer[20];
   int32_t step_compare = MOTOR_DEST_MAX / 2;
   int32_t step_diff;
   int32_t step_diff_max = 0L;
 
-  step_diff = abs(motor_nw.step_location - motor_nw.step_destination);
-  if (step_diff_max < step_diff) step_diff_max = step_diff;
-  step_diff = abs(motor_ne.step_location - motor_ne.step_destination);
-  if (step_diff_max < step_diff) step_diff_max = step_diff;
-  step_diff = abs(motor_sw.step_location - motor_sw.step_destination);
-  if (step_diff_max < step_diff) step_diff_max = step_diff;
-  step_diff = abs(motor_se.step_location - motor_se.step_destination);
-  if (step_diff_max < step_diff) step_diff_max = step_diff;
-
-  //compare this value to half of MOTOR_DEST_MAX, get percent close
-  if (step_diff > step_compare) {
-    step_compare=0;
-  } else {
-     step_compare = ((step_compare - step_diff) * 100L)/step_compare;
+  if (REQUEST_MOVE_STATUS == request_command) {
+    if (motor_nw.moveRequestPending() || motor_ne.moveRequestPending() || 
+        motor_sw.moveRequestPending() || motor_se.moveRequestPending() ) {
+        /* there is an update pending - assume zero progress */
+        step_compare=0;
+    } else {
+      // compute average percent of location differences
+      step_diff = abs(motor_nw.step_location - motor_nw.step_destination);
+      if (step_diff_max < step_diff) step_diff_max = step_diff;
+      step_diff = abs(motor_ne.step_location - motor_ne.step_destination);
+      if (step_diff_max < step_diff) step_diff_max = step_diff;
+      step_diff = abs(motor_sw.step_location - motor_sw.step_destination);
+      if (step_diff_max < step_diff) step_diff_max = step_diff;
+      step_diff = abs(motor_se.step_location - motor_se.step_destination);
+      if (step_diff_max < step_diff) step_diff_max = step_diff;
+    
+      //compare this value to half of MOTOR_DEST_MAX, get percent close
+      if (step_diff > step_compare) {
+        step_compare=0;
+      } else {
+         step_compare = ((step_compare - step_diff) * 100L)/step_compare;
+      }
+    }
+    
+    buffer[0] = (uint8_t) step_compare;
+    Wire.write(buffer[0]); // respond with message of 1 byte
   }
-  
-  b = (uint8_t) step_compare;
-  Wire.write(b); // respond with message of 1 byte
+
+  if (REQUEST_POSITION == request_command) {
+    buffer[ 0]= (motor_nw.step_location >> 24) & 0x00ffL;
+    buffer[ 1]= (motor_nw.step_location >> 16) & 0x00ffL;
+    buffer[ 2]= (motor_nw.step_location >>  8) & 0x00ffL;
+    buffer[ 3]= (motor_nw.step_location      ) & 0x00ffL;
+
+    buffer[ 4]= (motor_ne.step_location >> 24) & 0x00ffL;
+    buffer[ 5]= (motor_ne.step_location >> 16) & 0x00ffL;
+    buffer[ 6]= (motor_ne.step_location >>  8) & 0x00ffL;
+    buffer[ 7]= (motor_ne.step_location      ) & 0x00ffL;
+
+    buffer[ 8]= (motor_sw.step_location >> 24) & 0x00ffL;
+    buffer[ 9]= (motor_sw.step_location >> 16) & 0x00ffL;
+    buffer[10]= (motor_sw.step_location >>  8) & 0x00ffL;
+    buffer[11]= (motor_sw.step_location      ) & 0x00ffL;
+
+    buffer[12]= (motor_se.step_location >> 24) & 0x00ffL;
+    buffer[13]= (motor_se.step_location >> 16) & 0x00ffL;
+    buffer[14]= (motor_se.step_location >>  8) & 0x00ffL;
+    buffer[15]= (motor_se.step_location      ) & 0x00ffL;
+
+    Wire.write(buffer,16);
+  }
+
 }
+
