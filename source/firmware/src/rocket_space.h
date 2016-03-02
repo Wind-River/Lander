@@ -18,25 +18,25 @@
  
 
 // Dimensions of game mechanical space, in uMeters, referenced from game center
-// tower dimensions: 58 mm high, 48 mm wide, 34 mm deep
-#define X_POS_MIN -24000	// in uMeters ...
-#define X_POS_MAX  24000
-#define Y_POS_MIN -17000
-#define Y_POS_MAX  17000
-#define Z_POS_MIN  0
-#define Z_POS_MAX  58000
+// tower dimensions: 580 mm high, 480 mm wide, 340 mm deep
+#define X_POS_MIN -240000	// in uMeters ...
+#define X_POS_MAX  240000
+#define Y_POS_MIN -170000
+#define Y_POS_MAX  170000
+#define Z_POS_MIN       0
+#define Z_POS_MAX  580000
 
 // Dimensions of game play space, in uMeters, referenced from game center
-// Assume 10mm from top, 5 mm from sides
-#define GAME_X_POS_MIN -19000	// in uMeters ...
-#define GAME_X_POS_MAX  9000
-#define GAME_Y_POS_MIN -12000
-#define GAME_Y_POS_MAX  12000
-#define GAME_Z_POS_MIN  0
-#define GAME_Z_POS_MAX  48000
+// Assume 10mm from top, 50 mm from sides
+#define GAME_X_POS_MIN -190000	// in uMeters ...
+#define GAME_X_POS_MAX   90000
+#define GAME_Y_POS_MIN -120000
+#define GAME_Y_POS_MAX  120000
+#define GAME_Z_POS_MIN       0
+#define GAME_Z_POS_MAX  480000
 
 // Dimensions of game rocket, in uMeters, referenced from rocket center
-// rocket mount is 2.2 mm x 3.7 mm x 1.5 mm high
+// rocket mount is 22 mm x 37 mm x 15 mm high
 #define ROCKET_MOUNT_X_POS_MIN -11000	// in uMeters ...
 #define ROCKET_MOUNT_X_POS_MAX  11000
 #define ROCKET_MOUNT_Y_POS_MIN -17500
@@ -158,6 +158,8 @@ struct ROCKET_SPACE_S {
 
 extern struct ROCKET_SPACE_S r_space;
 extern struct ROCKET_TOWER_S r_towers[ROCKET_TOWER_MAX];
+
+extern int sqrt_cnt;
 
 bool init_rocket_hardware();
 void init_rocket_game (int32_t pos_x, int32_t pos_y, int32_t pos_z, int32_t fuel, int32_t gravity, int32_t mode);
