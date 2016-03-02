@@ -29,7 +29,7 @@
 #define IO_TRACKER_LOCAL_ENABLE		true	// enable the Pan&Tilt 'antenae' device
 #define IO_MOTOR_ENABLE				true	// enable the motors
 
-#define IO_REMOTE_ENABLE			true	// enable the sister i2c-slave board
+#define IO_REMOTE_ENABLE			false	// enable the sister i2c-slave board
 											// NOTE: the connection and remote board must be up else we will hang in "setup.c"
 #define IO_LEDS_REMOTE_ENABLE		true	// enable the LED space lighting
 #define IO_NEO_REMOTE_ENABLE		true	// enable the NeoPixels space lighting
@@ -37,6 +37,9 @@
 #define IO_TRACKER_REMOTE_ENABLE	false	// enable the Pan&Tilt 'antenae' device
 #define IO_LEDRGB_REMOTE_ENABLE		false	// enable the LED_RGB 'antenae' device
 
+// Debugging
+#define DEBUG_TIMING_ENABLE			true	// enable the timing measurements for QOS
+#define DEBUG_GAME_AT_START			true	// for game play testing, assume rocket already at start position
 
 // Specific installed hardware
 #define IO_GROVE_JOYSTICK_ENABLE true
@@ -154,8 +157,9 @@
 #define TILT_MID	((TILT_P90+TILT_P00)/2)
 
 /* Game Mode */
-#define GAME_PLAY		0
-#define GAME_SIMULATE	1
+#define GAME_PLAY		0x01	// normal game play with motor motion	
+#define GAME_SIMULATE	0x22	// simulated play, no motors, already at start
+#define GAME_AT_START	0x20	// assume rocket already at start position
 
 // Exported Structures and Funtions
 
