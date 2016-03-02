@@ -43,7 +43,7 @@ static char *STATE_NOP=NULL;
 static uint32_t StateGuiCount=0;
 static char buffer[1000];
 
-#define StateGuiMax 100
+#define StateGuiMax 160
 struct StateGuiRec state_array[StateGuiMax];
 int32_t state_now;	// current state
 static int32_t  state_prev;	// Previous state name (for pause/resume)
@@ -189,8 +189,8 @@ void jump_state(char *select_state_name) {
  */
 
 
-static void S_Start_Home_enter () {
-	init_rocket_game(ROCKET_HOME_X, ROCKET_HOME_Y, ROCKET_HOME_Z, GAME_FUEL_NOLIMIT, GAME_GRAVITY_NONE,GAME_AT_HOME);
+static void S_Start_At_Home_enter () {
+	init_rocket_game(ROCKET_HOME_X, ROCKET_HOME_Y, ROCKET_HOME_Z, GAME_FUEL_NOLIMIT, GAME_GRAVITY_NONE,GAME_PLAY|GAME_AT_START);
 	jump_state("S_Main_Play");
 }
 
@@ -202,7 +202,7 @@ static void S_Calibrate_enter () {
 	if (self_test) return;
 
 	// tell the motors to pretend that they are game start position, to avoid step limits 
-	init_rocket_game(0, 0, Z_POS_MAX/2, GAME_FUEL_NOLIMIT, GAME_GRAVITY_NONE,GAME_AT_HOME);
+	init_rocket_game(0, 0, Z_POS_MAX/2, GAME_FUEL_NOLIMIT, GAME_GRAVITY_NONE,GAME_SIMULATE);
 }
 
 static void S_Calibrate_loop () {
@@ -266,7 +266,7 @@ static void S_Calibrate_Done_enter () {
 	// self-test mode?
 	if (self_test) return;
 
-	init_rocket_game(ROCKET_CALIBRATE_X, ROCKET_CALIBRATE_Y, ROCKET_CALIBRATE_Z, GAME_FUEL_NOLIMIT, GAME_GRAVITY_NONE,GAME_AT_HOME);
+	init_rocket_game(ROCKET_CALIBRATE_X, ROCKET_CALIBRATE_Y, ROCKET_CALIBRATE_Z, GAME_FUEL_NOLIMIT, GAME_GRAVITY_NONE,GAME_SIMULATE);
 	jump_state("S_Main_Play");
 }
 
@@ -281,7 +281,7 @@ static void S_Calibrate_Status_enter  () {
 		(r_towers[ROCKET_TOWER_NE].step_count*ROCKET_TOWER_STEPS_PER_UM10)/UM10_PER_MILLIMETER,
 		(r_towers[ROCKET_TOWER_SW].step_count*ROCKET_TOWER_STEPS_PER_UM10)/UM10_PER_MILLIMETER,
 		(r_towers[ROCKET_TOWER_SE].step_count*ROCKET_TOWER_STEPS_PER_UM10)/UM10_PER_MILLIMETER);
-	jump_state("S_Calibrate");
+	jump_state("S_Calibrate_Home");
 }
 
 static void S_Test_Motor_Status_loop () {
@@ -1021,11 +1021,17 @@ static void S_Test_Sanity_enter () {
 	}
 	PRINT("========================================\n\n");
 
-	PRINT("==== sqrt test ===\n");
-	for (i=0;i<(Z_POS_MAX*2);i+=(Z_POS_MAX/32)) {
-		j=i/1000;
-		j=j*j;
-		PRINT("%4d:Sqrt(%d)=%d\n",i/1000,j,sqrt_with_accuracy(j, 500));
+	PRINT("==== sqrt test @ (max mm)^2 ===\n");
+	for (i=0,j=0;i<682400L;i+=(682400L/32),j++) {
+		int32_t sqrt;
+		sqrt = sqrt_with_accuracy(i, 500);
+		PRINT("%4d:Sqrt(%d)=%d (%d tries)\n",j,i,sqrt,sqrt_cnt);
+	}
+	PRINT("==== sqrt test @ (max mm*10)^2 ===\n");
+	for (i=0,j=0;i<68240000L;i+=(68240000L/32),j++) {
+		int32_t sqrt;
+		sqrt = sqrt_with_accuracy(i, 5000);
+		PRINT("%4d:Sqrt(%d)=%d (%d tries)\n",j,i,sqrt,sqrt_cnt);
 	}
 
 	PRINT("\n==== Cable Length Calculation Test ===\n");
@@ -1082,11 +1088,16 @@ static void S_Test_Sanity_enter () {
 
 void S_Shutdown_enter () {
 	/* move the rocket to the default home position, for power off */
-	init_rocket_game(ROCKET_HOME_X, ROCKET_HOME_Y, ROCKET_HOME_Z, GAME_FUEL_NOLIMIT, GAME_GRAVITY_NONE,GAME_GO_HOME);
+	init_rocket_game(ROCKET_HOME_X, ROCKET_HOME_Y, ROCKET_HOME_Z, GAME_FUEL_NOLIMIT, GAME_GRAVITY_NONE, GAME_PLAY);
 }
 
 void S_Shutdown_loop () {
-	uint8_t position_status = query_rocket_progress();
+	uint8_t position_status;
+
+	// self-test mode?
+	if (self_test) return;
+
+	position_status = query_rocket_progress();
 	sprintf(state_array[state_now].display_1,"Progress=%4d",position_status);
 	display_state();
 	if (100 == position_status) {
@@ -1108,8 +1119,8 @@ void state_callback(char *call_name) {
 	else if (0 == strcmp("S_Main_Play_enter",call_name))
 		S_Main_Play_enter();
 
-	else if (0 == strcmp("S_Start_Home_enter",call_name))
-		S_Start_Home_enter();
+	else if (0 == strcmp("S_Start_At_Home_enter",call_name))
+		S_Start_At_Home_enter();
 	else if (0 == strcmp("S_Calibrate_enter",call_name))
 		S_Calibrate_enter();
 	else if (0 == strcmp("S_Calibrate_loop",call_name))
@@ -1282,17 +1293,17 @@ void init_state () {
 	 "Rocket Position?",
 //	 "1234567890123456",
 	 "Home   Calibrate",
-	 "S_Start_Home","S_Calibrate",
+	 "S_Start_At_Home","S_Calibrate_Home",
 	 ACTION_NOP,ACTION_NOP,ACTION_NOP);
 
-		StateGuiAdd("S_Start_Home",
+		StateGuiAdd("S_Start_At_Home",
 		 STATE_NO_VERBOSE,
 		 "",
 		 "",
 		 STATE_NOP,STATE_NOP,
-		 "S_Start_Home_enter",ACTION_NOP,ACTION_NOP);
+		 "S_Start_At_Home_enter",ACTION_NOP,ACTION_NOP);
 
-		StateGuiAdd("S_Calibrate",
+		StateGuiAdd("S_Calibrate_Home",
 		 STATE_NO_VERBOSE,
 		 "Rocket Calibrate",
 	//	 "1234567890123456",
@@ -1329,16 +1340,8 @@ void init_state () {
 		 STATE_NOP,"S_Game_Done",
 		 "S_Game_Start_enter","S_Game_Start_loop",ACTION_NOP);
 
-		StateGuiAdd("S_Game_Position",
-		 STATE_NO_FLAGS,
-		 "",
-	//	 "1234567890123456",
-		 "          Cancel",
-		 STATE_NOP,"S_Game_Done",
-		 "S_Shutdown_enter","S_Shutdown_loop",ACTION_NOP);
-
 		StateGuiAdd("S_Game_Play",
-		 STATE_NO_VERBOSE,
+		 STATE_NO_VERBOSE|STATE_FROM_CALLBACK,
 		 "",
 		 "",
 		 "S_Main_Play","S_Game_Display_Next",
@@ -1912,7 +1915,7 @@ void init_state () {
 	 "Setup...",
 //	 "1234567890123456",
 	 "Calibrate   Next",
-	 "S_Calibrate","S_Test_Motor_Status",
+	 "S_Calibrate_Home","S_Test_Motor_Status",
 	 ACTION_NOP,ACTION_NOP,ACTION_NOP);
 
 	StateGuiAdd("S_Test_Motor_Status",
