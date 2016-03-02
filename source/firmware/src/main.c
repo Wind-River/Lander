@@ -1,20 +1,21 @@
 /* main.c - Rocket Lander Game */
 
 /* <legal-notice>
-*
-* Copyright (c) 2016 Wind River Systems, Inc.
-*
-* This software has been developed and/or maintained under the Wind River 
-* CodeSwap program. The right to copy, distribute, modify, or otherwise 
-* make use of this software may be licensed only pursuant to the terms
-* of an applicable Wind River license agreement.
-* 
-* <credits>
-*   { David Reyna,  david.reyna@windriver.com,  },
-* </credits>
-*
-* </legal-notice>
-*/
+ *
+ * Copyright (c) 2016 Wind River Systems, Inc.
+ *
+ * This software has been developed and/or maintained under the Wind River 
+ * CodeSwap program. The right to copy, distribute, modify, or otherwise 
+ * make use of this software may be licensed only pursuant to the terms
+ * of an applicable Wind River license agreement.
+ * 
+ * <credits>
+ *   { David Reyna,  david.reyna@windriver.com,  },
+ * </credits>
+ *
+ * </legal-notice>
+ */
+ 
 
 /*
  * Microkernel demo of a Rocket Lander Game
@@ -31,63 +32,6 @@
  *
  */
 
-
-/*
-	*	E:\temp\MyNewRocket-virtual-gateway
-Todo:
-	x	Enable buttons, test state transitions
-	x	Enable Joystick, basic game play
-	x	Finish Z,XYZ game play
-	--- Demo 1 checkpoint
-	x	Re-parameterize code
-		x	calibrate m/s to game units
-		x	calibrate change/s to loop units
-		x	option states
-	x	Rocket position to motor parameters
-		x	compute rocket position to cable lengths
-		x	compute rocket position to cable stepping!
-	x	Create 'Move' game for movement testing
-		x	no inertia/gravity (e./g. gantry motion model)
-		x	fast x/y/z
-==>	--- Demo 2 checkpoint
-	*	Game display modes
-		x	raw x,y,z,f (m units)
-		x	raw cables
-		*	true meters
-	*	Large and small state LEDs
->		*	Vincent's I2C code for large display, I2C adapter
-		?	small LEDs
-	*	Communication with daughter Arduino
-		*	Serial server
-		*	Serial client
-	*	Wait for rocket to move to game start position
-	*	import thrust method from sample game
-	*	Implement power-up setup and calibration states
-	--- Demo 3 checkpoint
-	*	Arduino-101
-		*	test with slider and I2C motor control
-		*	COMM software
-		*	Cliet/Server
-	*	Integration with X-Y-Z motors
-	--- Demo 4 checkpoint
-	*	Enable Tracker Pan-Tilt
->		*	Dual PWM Grove cable
-		*	cos table
-		*	PWM
-	*	Enable Tracker LED-RGB
-		*	i2c
-	*	Game Auto-pilot (for self-play, come hither mode)
-		*	import auto-pilot method from sample game
-	--- Demo 5 checkpoint
-	*	Enable Sound
-	*	Enable Cloud
-
-*/
-
-/*
- * Hardware Enablement, Global Environment
- *
- */
 
 #include <zephyr.h>
 
@@ -200,8 +144,7 @@ void adcCallback
  *
  */
 
-void init_hardware()
-	{
+void init_hardware() {
 
 	/* Init the I/O pins */
 	if (IO_JOYSTICK_ENABLE) {
@@ -235,7 +178,7 @@ void init_hardware()
 	}
 
 	/* Init the Phone/Server */
-
+	// TODO ###############
 
  }
 
@@ -244,8 +187,7 @@ void init_hardware()
  *
  */
 
-void scan_controls ()
- {
+void scan_controls () {
     int32_t rc;
 
 	if (IO_BUTTONS_ENABLE) {
@@ -254,18 +196,20 @@ void scan_controls ()
 	}
 
 	if (IO_JOYSTICK_ENABLE) {
-		/* the example code for some reason re-asserts the channel numbers?? */
         rc = adc_read(adc, &table);
         if (DEV_OK != rc)
             {
-            PRINT("ADC read error! (%d)\n", rc);
+            PRINT("ERROR: ADC read error! (%d)\n", rc);
             }
         else
             {
-            /* PRINT("wait for callback\n"); */
+            /* PRINT("ADCREADY...); */
             task_event_recv_wait(ADCREADY);
-			// TODO #################### How much time is spent waiting?
+            /* PRINT("DONE\n); */
+			if (DEBUG_TIMING_ENABLE) {
+				// TODO #################### How much time is spent waiting?
             }
+        }
         r_control.analog_x = seq_buffer[0];
         r_control.analog_y = seq_buffer[1];
         r_control.analog_z = seq_buffer[2];
@@ -274,7 +218,6 @@ void scan_controls ()
 			// TODO ####################
 		}
  	}
-
 }
 
 /*
@@ -456,9 +399,11 @@ void init_game () {
 	} else if (r_game.game == GAME_XYZ_LAND) {
 		init_rocket_game(init_x, init_y, GAME_Z_POS_MAX, r_game.fuel_option, r_game.gravity_option,GAME_PLAY);
 	} else if (r_game.game == GAME_XYZ_FLIGHT) {
-		init_rocket_game(init_x, init_y,         0, r_game.fuel_option, r_game.gravity_option,GAME_PLAY);
+		init_rocket_game(init_x, init_y, 0, r_game.fuel_option, r_game.gravity_option,GAME_PLAY);
 	} else if (r_game.game == GAME_XYZ_AUTO) {
 		init_rocket_game(init_x, init_y, GAME_Z_POS_MAX, r_game.fuel_option, r_game.gravity_option,GAME_PLAY);
+	} else if (r_game.game == GAME_XYZ_MOVE) {
+		init_rocket_game(init_x, init_y, GAME_Z_POS_MAX/2, r_game.fuel_option, r_game.gravity_option,GAME_PLAY);
 	} else {
 		init_rocket_game(init_x, init_y, GAME_Z_POS_MAX, r_game.fuel_option, r_game.gravity_option,GAME_PLAY);
 	}
@@ -476,8 +421,7 @@ void init_game () {
  *
  */
 
-void init_main()
-	{
+void init_main() {
     // Preset the game defaults
 	if (IO_BUTTON_BRINGUP) {
 	    r_game.game = GAME_XYZ_MOVE;
@@ -498,16 +442,52 @@ void init_main()
 	r_control.analog_y=JOYSTICK_Y_MID;
 	r_control.analog_z=JOYSTICK_Z_MID;
 
-	}
+}
 
 /*
- * main - LCD demo
+ * main - Rocket Lander
  *
  */
+ 
+ void main_time_test(uint32_t time_start,uint32_t time_stop) {
+	static uint32_t time_sum = 0L;
+	static uint32_t time_cnt = 0L;
+	static uint32_t time_max3 = 0L;
+	static uint32_t time_max2 = 0L;
+	static uint32_t time_max1 = 0L;
+	
+	uint32_t time_diff = 0;
+	
+	if (DEBUG_TIMING_ENABLE) {
+		time_cnt++;
+		if (time_cnt > 0) {
+			time_diff = time_stop - time_start;
+			time_sum += time_diff;
+			
+			if (time_diff > time_max3) {
+			    time_max1 = time_max2;
+			    time_max2 = time_max3;
+			    time_max3 = time_diff;
+			} else if (time_diff > time_max2) {
+			    time_max1 = time_max2;
+			    time_max2 = time_diff;
+			} else if (time_diff > time_max1) {
+			    time_max1 = time_diff;
+			}
+	
+			// display time ave every 64 * 1/5 second ~= 13 seconds
+			if (0x0000 == (time_cnt & 0x003f)) {
+				PRINT("*** Main_Time(%ld) = %ld / %ld, %ld < %ld < %ld\n",time_cnt,time_sum/time_cnt,sys_clock_ticks_per_sec,time_max3,time_max2,time_max1);
+			}
+		}
+	}
+}
 
-void main()
-    {
+
+void main() {
     bool flag = false;
+   	uint32_t time_start,time_stop;
+
 
 	init_main();
 	init_state();
@@ -531,6 +511,9 @@ void main()
 
     while (1)
         {
+        	
+		/* get the time at start of loop */
+	   	time_start = task_tick_get_32();
 
         /* Blink the on-board LED */
         if (flag)
@@ -550,11 +533,20 @@ void main()
 		/* Process Buttons (default mode is toggle) */
 		state_loop();
 
-        /* wait a while, then loop again */
-
-        task_sleep(SLEEPTICKS);
+        /* wait a while to loop again, less the time spent in loop */
+	   	time_stop = task_tick_get_32();
+		main_time_test(time_start,time_stop);
+	   	if (time_stop < time_start) {
+	   		/* time counter looped, use default delay */
+	        task_sleep(SLEEPTICKS - 1);
+	   	} else if (SLEEPTICKS <= (time_stop - time_start)) {
+	        /* no sleep for the busy */
+	   	} else {
+	   		/* sleep the balance, rounding down one tick */
+	        task_sleep(SLEEPTICKS - (time_stop - time_start) - 1);
         }
     }
+}
 
 /*
  * @brief Callback, which is invoked when ADC gets new data
@@ -562,14 +554,9 @@ void main()
  * @param dev ADC device structure
  * @param cb_type can be ADC_CB_DONE or ADC_CB_ERROR
  */
-void adcCallback
-    (
-    struct device *dev,
-    enum adc_callback_type cb_type
-    )
-    {
+void adcCallback (struct device *dev, enum adc_callback_type cb_type) {
     if (dev == adc && cb_type == ADC_CB_DONE)
         {
         isr_event_send(ADCREADY);
 		}
-    }
+}
