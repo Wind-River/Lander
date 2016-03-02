@@ -121,6 +121,10 @@ void init_rocket_game (int32_t pos_x, int32_t pos_y, int32_t pos_z, int32_t fuel
  {
 
 	// set initial rocket conditions
+	if (DEBUG_GAME_AT_START) {
+		// for game pre-test, skip motor move to initial position
+		mode |= GAME_AT_START;
+	}
 
 	// TODO ################### Adjust
 	r_game.fuel_option = fuel;
@@ -144,7 +148,7 @@ void init_rocket_game (int32_t pos_x, int32_t pos_y, int32_t pos_z, int32_t fuel
 	r_space.rocket_goal_y = pos_y;
 	r_space.rocket_goal_z = pos_z;
 
-	if (GAME_AT_HOME == mode) {
+	if (GAME_AT_START & mode) {
 		r_space.rocket_x = pos_x;		// preset current game-space rocket position, in uMeters
 		r_space.rocket_y = pos_y;
 		r_space.rocket_z = pos_z;
@@ -163,16 +167,12 @@ void init_rocket_game (int32_t pos_x, int32_t pos_y, int32_t pos_z, int32_t fuel
 	// move to the rocket start position
 	compute_rocket_next_position();
 	compute_rocket_cable_lengths();
-	
-	/* use set_rocket_position for motor test bring up */
-	if ((true || (GAME_AT_HOME == mode)) && (GAME_GO_HOME != mode)) {
-		// TODO ################
+	if (GAME_AT_START & mode) {
+		/* use set_rocket_position for motor test bring up */
 		set_rocket_position();
-	}
-	if (false || (GAME_GO_HOME == mode)) {
-		// Move Rocket and wait until rocket is in position
+	} else {
+		// Move Rocket to start position
 		move_rocket_position();
-		// TODO ################
 	}
 }
 
@@ -195,8 +195,8 @@ void compute_rocket_next_position ()
 
 	if (GAME_XYZ_MOVE == r_game.game) {
 		// fast absolute xy changes in 'move' mode
-		rocket_thrust_inc_x = 1000;
-		rocket_thrust_inc_y = 1000;
+		rocket_thrust_inc_x = 5000;
+		rocket_thrust_inc_y = 5000;
 	}
 
 	// Convert joystick to thrust values
@@ -280,13 +280,14 @@ void compute_rocket_next_position ()
  *
  */
 
-static int sqrt_cnt=0;	// loop protection counter
+int sqrt_cnt=0;	// loop protection counter
 
 // Newton-Raphson method
-int32_t sqrt_with_accuracy(int32_t x, int32_t init_guess)
+//   NOTE: allowed accuracy of (1..-1) avoids infinite bounce between 1 and -1
+int32_t do_sqrt_with_accuracy(int32_t x, int32_t init_guess)
 {	int32_t next_guess;
 
-	if (++sqrt_cnt > 20) {
+	if (++sqrt_cnt > 10) {
 		PRINT("#############SQRT_TOOMANY(%ld,%ld\n",x,init_guess);
 		return init_guess;
 	}
@@ -298,24 +299,33 @@ int32_t sqrt_with_accuracy(int32_t x, int32_t init_guess)
 	if (abs(init_guess - next_guess) < 2)
 		return(next_guess);
 	else
-		return(sqrt_with_accuracy(x, next_guess));
+		return(do_sqrt_with_accuracy(x, next_guess));
 };
+
+int32_t sqrt_with_accuracy(int32_t x, int32_t init_guess) {
+	sqrt_cnt=0;
+	return do_sqrt_with_accuracy(x, init_guess);
+}
+
 
 /*
  * compute_rocket_cable_lengths : compute the rocket position to cable lengths
  *
  */
 
+/* #define LENGTH_SQRT_SCALER 1000
+   #define LENGTH_SQRT_INIT    500 */
+#define LENGTH_SQRT_SCALER 100	/* Scale at 100 uM closely matches stepper 125nM step size */
+#define LENGTH_SQRT_INIT  5000
+
 static void do_compute_cable_length(int32_t tower) {
 	int32_t x,y,z,length;
 
-	sqrt_cnt=0;
-
-	// we will use millimeters for the intermedate calculation to avoid overflow
-	x=(r_space.rocket_goal_x - r_towers[tower].pos_x + r_towers[tower].mount_pos_x)/1000;
-	y=(r_space.rocket_goal_y - r_towers[tower].pos_y + r_towers[tower].mount_pos_y)/1000;
-	z=(r_space.rocket_goal_z - r_towers[tower].pos_z + r_towers[tower].mount_pos_z)/1000;
-	r_towers[tower].length_goal = sqrt_with_accuracy((x*x)+(y*y)+(z*z),500)*1000;
+	// we will use uMeter scaler for the intermedate calculation to avoid overflow
+	x=(r_space.rocket_goal_x - r_towers[tower].pos_x + r_towers[tower].mount_pos_x)/LENGTH_SQRT_SCALER;
+	y=(r_space.rocket_goal_y - r_towers[tower].pos_y + r_towers[tower].mount_pos_y)/LENGTH_SQRT_SCALER;
+	z=(r_space.rocket_goal_z - r_towers[tower].pos_z + r_towers[tower].mount_pos_z)/LENGTH_SQRT_SCALER;
+	r_towers[tower].length_goal = sqrt_with_accuracy((x*x)+(y*y)+(z*z),LENGTH_SQRT_INIT)*LENGTH_SQRT_SCALER;
 
 	// Calculate needed cable deployment change
 	length = r_towers[tower].length_goal - r_towers[tower].length;
