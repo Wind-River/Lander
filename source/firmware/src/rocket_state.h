@@ -18,12 +18,12 @@
  
 
 #define STATE_NO_FLAGS       0x0000
-#define STATE_NO_DISPLAY     0x0001
-#define STATE_NO_VERBOSE     0x0002
-#define STATE_BUTTON_HOLD_A  0x0010
-#define STATE_BUTTON_HOLD_B  0x0020
-#define STATE_FROM_CALLBACK  0x0040
-#define STATE_NOT_FOUND 999
+#define STATE_NO_DISPLAY     0x0001		// do not update the LCD display (avoid unneeded overhead)
+#define STATE_NO_VERBOSE     0x0002		// do not display the state on the serial console (avoid overflow)
+#define STATE_BUTTON_HOLD_A  0x0010		// Treat button as on/off instead of toggle 
+#define STATE_BUTTON_HOLD_B  0x0020		// Treat button as on/off instead of toggle 
+#define STATE_FROM_CALLBACK  0x0040		// For usage validation, mark this state directly used by a callback 
+#define STATE_NOT_FOUND      0x0999
 
 
 struct StateGuiRec {
