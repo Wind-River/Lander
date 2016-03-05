@@ -37,10 +37,10 @@
 
 // Dimensions of game rocket, in uMeters, referenced from rocket center
 // rocket mount is 22 mm x 37 mm x 15 mm high
-#define ROCKET_MOUNT_X_POS_MIN -11000	// in uMeters ...
-#define ROCKET_MOUNT_X_POS_MAX  11000
-#define ROCKET_MOUNT_Y_POS_MIN -17500
-#define ROCKET_MOUNT_Y_POS_MAX  17500
+#define ROCKET_MOUNT_X_POS_MIN -17500	// in uMeters ...
+#define ROCKET_MOUNT_X_POS_MAX  17500
+#define ROCKET_MOUNT_Y_POS_MIN -11000
+#define ROCKET_MOUNT_Y_POS_MAX  11000
 #define ROCKET_MOUNT_Z_POS_MIN      0
 #define ROCKET_MOUNT_Z_POS_MAX  15000
 // Scale of game space to real space
@@ -84,7 +84,7 @@
 
 #define ROCKET_HOME_X         0 // this is the power off rocket step home position
 #define ROCKET_HOME_Y         0
-#define ROCKET_HOME_Z     -5000 // this is negative to provide cable slack (in um)
+#define ROCKET_HOME_Z         0 // this is negative to provide cable slack (in um)
 #define ROCKET_CALIBRATE_X	  0	// this is the calibration point rocket home position
 #define ROCKET_CALIBRATE_Y	  0
 #define ROCKET_CALIBRATE_Z	  0
