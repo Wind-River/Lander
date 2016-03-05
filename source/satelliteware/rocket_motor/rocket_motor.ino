@@ -79,6 +79,7 @@
 #define TOWER_SE_B_PORT 11
 #define TOWER_PORT_MIN  TOWER_NW_A_PORT
 #define TOWER_PORT_MAX  TOWER_SE_B_PORT
+#define MOTOR_POWER_PIN 12   // power PWM output pin
 #endif 
 
 /* ======== ARDUINO UNO PORT ASSIGNMENTS ========= */
@@ -93,6 +94,7 @@
 #define TOWER_SE_B_PORT 10
 #define TOWER_PORT_MIN  TOWER_NW_A_PORT
 #define TOWER_PORT_MAX  TOWER_SE_B_PORT
+#define MOTOR_POWER_PIN 12   // power PWM output pin
 #endif
 
 //
@@ -142,8 +144,10 @@ uint8_t request_command = REQUEST_MOVE_STATUS;
 #define MOTOR_POWER_OFF       0   // value of PWM signal to motor STBY control pins
 #define MOTOR_POWER_ON      255   // STBY is full on
 #define MOTOR_POWER_LOW     128   // STBY is half on
-#define MOTOR_POWER_PIN      12   // power PWM output pin
 #define MOTOR_POWER_PIN_NULL  0   // power PWM output pin is undefined
+
+/* motor mode flags */
+#define MOTOR_CALIBRATE_MODE  0x01  // calibrate mode, disable step limits
 
 class Motor {
   public:
@@ -188,11 +192,12 @@ class Motor {
     int32_t req_step_increment; // pending step increment value
     int32_t req_step_speed_timecount_max;     // pending speed, in countdown useconds
 
-    boolean enable_motion;       // stop or go
+    boolean enable_motion;      // stop or go
 
     // static member variables
     static uint8_t power_pwm;   // power value 100=full on, 0=full off
-    static uint8_t power_pin;  // pin for power control
+    static uint8_t power_pin;   // pin for power control
+    static uint8_t mode;        // global motor mode 
 
   private:
 };
@@ -200,6 +205,7 @@ class Motor {
 // init static members
 uint8_t Motor::power_pwm=MOTOR_POWER_OFF;
 uint8_t Motor::power_pin=MOTOR_POWER_PIN_NULL;
+uint8_t Motor::mode=0;
 
 Motor::Motor(const char * name, uint16_t pin_a,uint16_t pin_b) {
   this->name = name;
@@ -345,12 +351,14 @@ void Motor::step_loop(uint16_t u_sec_passed) {
       movement_display_counter = MOVEMENT_DISPLAY_COUNT;
     }
 
-    // test limits
-    if (step_destination < MOTOR_DEST_MIN)
-      step_destination = MOTOR_DEST_MIN;
-    if (step_destination > MOTOR_DEST_MAX)
-      step_destination = MOTOR_DEST_MAX;
-    
+    // test limits (if not in calibrate mode)
+    if (0x00 = Motor::mode & MOTOR_CALIBRATE_MODE) {
+      if (step_destination < MOTOR_DEST_MIN)
+        step_destination = MOTOR_DEST_MIN;
+      if (step_destination > MOTOR_DEST_MAX)
+        step_destination = MOTOR_DEST_MAX;
+    }
+        
     // calculate new loop speed
     step_speed_timecount_max = req_step_speed_timecount_max;
     req_step_speed_timecount_max = 0;
@@ -766,6 +774,10 @@ void display_debug() {
   motor_sw.displayStatus();
   motor_se.displayStatus();
 
+  // power status
+  Serial.print("Power = ");
+  Serial.println(motor_nw.power_pwm);
+
   // display timing summaries
   if (false && ENABLE_TIMING) {
     ave_loop.displayResults("loop",true);
@@ -873,6 +885,16 @@ void receiveEvent(int16_t howMany) {
       }
     }  
 
+    // Set calbration mode 
+    if ('C' == (char) buffer[0]) {
+      Motor::mode |= MOTOR_CALIBRATE_MODE;
+    }
+
+    // Set normal mode 
+    if ('N' == (char) buffer[0]) {
+      Motor::mode &= ~MOTOR_CALIBRATE_MODE;
+    }
+    
     // Set next request mode 
     if ('?' == (char) buffer[0]) {
       request_command = buffer[1];
@@ -947,4 +969,3 @@ void requestEvent() {
   }
 
 }
-
