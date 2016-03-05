@@ -197,21 +197,31 @@ static void S_Start_At_Home_enter () {
 
 /**** CALIBRATION ********************************************************/
 
-static void S_Calibrate_enter () {
+int32_t calibration_lock_x;
+int32_t calibration_lock_y;
+int32_t x_delta,y_delta;
+
+static void S_Calibrate_Init_enter () {
 	// self-test mode?
 	if (self_test) return;
 
 	// tell the motors to pretend that they are game start position, to avoid step limits 
 	init_rocket_game(0, 0, Z_POS_MAX/2, GAME_FUEL_NOLIMIT, GAME_GRAVITY_NONE,GAME_SIMULATE);
+	
+	// unlock the motor selection
+	calibration_lock_x=0;
+	calibration_lock_y=0;
+
+	goto_state("S_Calibrate_Home");
 }
 
 static void S_Calibrate_loop () {
 	int32_t nw_inc=0,ne_inc=0,sw_inc=0,se_inc=0;
-	int32_t x_delta,y_delta,z_delta;
+	int32_t z_delta;
 
 	// self-test mode?
 	if (self_test) return;
-
+	
 	// Thruster Z is 'proportion-up or 'proportion-down' or 'off'
 	z_delta = r_control.analog_z - JOYSTICK_Z_MID;
 	if (z_delta < -JOYSTICK_DELTA_Z_MIN) {
@@ -222,44 +232,74 @@ static void S_Calibrate_loop () {
 	}
 
 	// Convert joystick to tower selection
-	x_delta = r_control.analog_x - JOYSTICK_X_MID;
-	if (x_delta < -JOYSTICK_DELTA_XY_MIN) {
-		x_delta = -1;
-	} else if (x_delta > JOYSTICK_DELTA_XY_MIN ) {
-		x_delta = 1;
+	if (calibration_lock_x || calibration_lock_y) {
+		x_delta = calibration_lock_x;
+		y_delta = calibration_lock_y;
 	} else {
-		x_delta = 0;
-	}
-
-	// Thruster Y is 'on-forward or 'on-backward' or 'off'
-	y_delta = r_control.analog_y - JOYSTICK_Y_MID;
-	if (y_delta < -JOYSTICK_DELTA_XY_MIN) {
-		y_delta = -1;
-	} else if (y_delta > JOYSTICK_DELTA_XY_MIN ) {
-		y_delta = 1;
-	} else {
-		y_delta = 0;
+		x_delta = r_control.analog_x - JOYSTICK_X_MID;
+		if (x_delta < -JOYSTICK_DELTA_XY_MIN) {
+			x_delta = -1;
+		} else if (x_delta > JOYSTICK_DELTA_XY_MIN ) {
+			x_delta = 1;
+		} else {
+			x_delta = 0;
+		}
+	
+		// Thruster Y is 'on-forward or 'on-backward' or 'off'
+		y_delta = r_control.analog_y - JOYSTICK_Y_MID;
+		if (y_delta < -JOYSTICK_DELTA_XY_MIN) {
+			y_delta = -1;
+		} else if (y_delta > JOYSTICK_DELTA_XY_MIN ) {
+			y_delta = 1;
+		} else {
+			y_delta = 0;
+		}
 	}
 	
 	// scale Z from nm to steps
 	z_delta = (z_delta * 10L) / ROCKET_TOWER_STEPS_PER_UM10;
 
 	// if quadarant, then only affect that tower
-	if      ((x_delta < 0) && (y_delta > 0)) nw_inc=z_delta;
-	else if ((x_delta > 0) && (y_delta > 0)) ne_inc=z_delta;
-	else if ((x_delta < 0) && (y_delta < 0)) sw_inc=z_delta;
-	else if ((x_delta > 0) && (y_delta < 0)) se_inc=z_delta;
-	else if ((x_delta == 0) && (y_delta == 0)) {
+	if      ((x_delta < 0) && (y_delta > 0)) {
+		nw_inc=z_delta;
+		state_array[state_now].display_2[5]='N';
+		state_array[state_now].display_2[6]='W';
+		display_state();
+	} else if ((x_delta > 0) && (y_delta > 0)) {
+		ne_inc=z_delta;
+		state_array[state_now].display_2[5]='N';
+		state_array[state_now].display_2[6]='E';
+		display_state();
+	} else if ((x_delta < 0) && (y_delta < 0)) {
+		sw_inc=z_delta;
+		state_array[state_now].display_2[5]='S';
+		state_array[state_now].display_2[6]='W';
+		display_state();
+	} else if ((x_delta > 0) && (y_delta < 0)) {
+		se_inc=z_delta;
+		state_array[state_now].display_2[5]='S';
+		state_array[state_now].display_2[6]='E';
+		display_state();
+	} else if ((x_delta == 0) && (y_delta == 0)) {
 		// if center, then affect all towers
 		nw_inc=z_delta;
 		ne_inc=z_delta;
 		sw_inc=z_delta;
 		se_inc=z_delta;
+		state_array[state_now].display_2[5]='A';
+		state_array[state_now].display_2[6]='L';
+		display_state();
 	}
-
-	// send the increment
-	rocket_increment_send (nw_inc, ne_inc, sw_inc, se_inc);
-
+	
+	if (nw_inc || ne_inc || sw_inc || se_inc) {
+		// Keep the controllers thinking the rocket is within bounds
+		for (int i=ROCKET_TOWER_NW;i<ROCKET_TOWER_MAX;i++) r_towers[i].step_count = 6575L/2L;
+		rocket_position_send();
+		rocket_command_send(ROCKET_MOTOR_CMD_PRESET);
+	
+		// send the increment
+		rocket_increment_send (nw_inc, ne_inc, sw_inc, se_inc);
+	}
 }
 
 static void S_Calibrate_Done_enter () {
@@ -271,6 +311,16 @@ static void S_Calibrate_Done_enter () {
 }
 
 static void S_Calibrate_Status_enter  () {
+	
+	// lock the current motor (unlock if currently locked)
+	if (calibration_lock_x || calibration_lock_y) {
+		calibration_lock_x = 0;
+		calibration_lock_y = 0;
+	} else {
+		calibration_lock_x = x_delta;
+		calibration_lock_y = y_delta;
+	}
+	
 	PRINT("\nStep Status:NW=%ld, NE=%ld, SW=%ld, SE=%ld\n",
 		r_towers[ROCKET_TOWER_NW].step_count,
 		r_towers[ROCKET_TOWER_NE].step_count,
@@ -1121,8 +1171,8 @@ void state_callback(char *call_name) {
 
 	else if (0 == strcmp("S_Start_At_Home_enter",call_name))
 		S_Start_At_Home_enter();
-	else if (0 == strcmp("S_Calibrate_enter",call_name))
-		S_Calibrate_enter();
+	else if (0 == strcmp("S_Calibrate_Init_enter",call_name))
+		S_Calibrate_Init_enter();
 	else if (0 == strcmp("S_Calibrate_loop",call_name))
 		S_Calibrate_loop();
 	else if (0 == strcmp("S_Calibrate_Done_enter",call_name))
@@ -1293,7 +1343,7 @@ void init_state () {
 	 "Rocket Position?",
 //	 "1234567890123456",
 	 "Home   Calibrate",
-	 "S_Start_At_Home","S_Calibrate_Home",
+	 "S_Start_At_Home","S_Calibrate_Home_Select",
 	 ACTION_NOP,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Start_At_Home",
@@ -1303,14 +1353,21 @@ void init_state () {
 		 STATE_NOP,STATE_NOP,
 		 "S_Start_At_Home_enter",ACTION_NOP,ACTION_NOP);
 
-		StateGuiAdd("S_Calibrate_Home",
+		StateGuiAdd("S_Calibrate_Home_Select",
 		 STATE_NO_VERBOSE,
-		 "Rocket Calibrate",
-	//	 "1234567890123456",
-		 "Done      Status",
-		 "S_Calibrate_Done","S_Calibrate_Status",
-		 "S_Calibrate_enter","S_Calibrate_loop",ACTION_NOP);
+		 "",
+		 "",
+		 STATE_NOP,STATE_NOP,
+		 "S_Calibrate_Init_enter",ACTION_NOP,ACTION_NOP);
 
+			StateGuiAdd("S_Calibrate_Home",
+			 STATE_NO_VERBOSE,
+			 "Rocket Calibrate",
+		//	 "1234567890123456",
+			 "Done    (Un)Lock",
+			 "S_Calibrate_Done","S_Calibrate_Status",
+			 ACTION_NOP,"S_Calibrate_loop",ACTION_NOP);
+	
 			StateGuiAdd("S_Calibrate_Done",
 			 STATE_NO_FLAGS,
 			 "",
