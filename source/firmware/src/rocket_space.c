@@ -15,6 +15,21 @@
  *
  * </legal-notice>
  */
+ 
+/*
+ * Theory of Implementation
+ *
+ * This file manages the game space:
+ *   - Conversion of inputs to rocket movement
+ *   - Management of speed, gravity, momentum, accelleration
+ *   - Conversion of location to cable lengths and motor step counts
+ *   - Communitation with the Rocket Motor daugther controller
+ *
+ * The game space is measured in micro meters, to best map with the stepper increments (~ 1/10 millimeter)
+ *
+ * All game-time computation is done with integer math, for fastest speed. This requires scaling in places.
+ *
+ */
 
 #include <zephyr.h>
 
@@ -26,7 +41,7 @@
 
 #include "rocket.h"
 #include "rocket_space.h"
-
+#include "rocket_math.h"
 
 /* 
  * forward declarations
@@ -48,42 +63,58 @@ struct ROCKET_SPACE_S r_space;
 
 struct ROCKET_TOWER_S r_towers[ROCKET_TOWER_MAX] = {
     {
+    	.name        = "NW",
         .pos_x       = X_POS_MIN,
         .pos_y       = Y_POS_MAX,
         .pos_z       = Z_POS_MAX,
         .mount_pos_x = ROCKET_MOUNT_X_POS_MIN,
 	    .mount_pos_y = ROCKET_MOUNT_Y_POS_MAX,
 	    .mount_pos_z = ROCKET_MOUNT_Z_POS_MAX,
+        .um2step_slope = 1005L, // default = 125.64 uM/step << 3
+        .um2step_scaler = 3,
+        .um2step_offset = 0,
         .i2c_address = ROCKET_TOWER_NW_ADDR,
         .speed = MOTOR_SPEED_AUTO
     },
     {
+    	.name        = "NE",
         .pos_x       = X_POS_MAX,
         .pos_y       = Y_POS_MAX,
         .pos_z       = Z_POS_MAX,
         .mount_pos_x = ROCKET_MOUNT_X_POS_MAX,
 	    .mount_pos_y = ROCKET_MOUNT_Y_POS_MAX,
 	    .mount_pos_z = ROCKET_MOUNT_Z_POS_MAX,
+        .um2step_slope = 1005L, // default = 125.64 uM/step << 3
+        .um2step_scaler = 3,
+        .um2step_offset = 0,
         .i2c_address = ROCKET_TOWER_NE_ADDR,
         .speed = MOTOR_SPEED_AUTO
     },
     {
+    	.name        = "SW",
         .pos_x       = X_POS_MIN,
         .pos_y       = Y_POS_MIN,
         .pos_z       = Z_POS_MAX,
         .mount_pos_x = ROCKET_MOUNT_X_POS_MIN,
 	    .mount_pos_y = ROCKET_MOUNT_Y_POS_MIN,
 	    .mount_pos_z = ROCKET_MOUNT_Z_POS_MAX,
+        .um2step_slope = 1005L, // default = 125.64 uM/step << 3
+        .um2step_scaler = 3,
+        .um2step_offset = 0,
         .i2c_address = ROCKET_TOWER_SW_ADDR,
         .speed = MOTOR_SPEED_AUTO
     },
     {
+    	.name        = "SE",
         .pos_x       = X_POS_MAX,
         .pos_y       = Y_POS_MIN,
         .pos_z       = Z_POS_MAX,
         .mount_pos_x = ROCKET_MOUNT_X_POS_MAX,
 	    .mount_pos_y = ROCKET_MOUNT_Y_POS_MIN,
 	    .mount_pos_z = ROCKET_MOUNT_Z_POS_MAX,
+        .um2step_slope = 1005L, // default = 125.64 uM/step << 3
+        .um2step_scaler = 3,
+        .um2step_offset = 0,
         .i2c_address = ROCKET_TOWER_SE_ADDR,
         .speed = MOTOR_SPEED_AUTO
     },
@@ -98,11 +129,14 @@ struct ROCKET_TOWER_S r_towers[ROCKET_TOWER_MAX] = {
 
 bool init_rocket_hardware () {
 
-	// TODO ################ Calibrate true rocket power-up position
 	r_space.rocket_x = 0;			// current game-space rocket position, in uMeters
 	r_space.rocket_y = 0;
 	r_space.rocket_z = 0;
 
+	// 
+	//compute_tower_step_to_nm(&r_towers);
+	compute_tower_step_to_nm();
+	
 	// Initialize XYZ motor controls
 	if (IO_MOTOR_ENABLE) {
 		// TODO ################
@@ -275,38 +309,6 @@ void compute_rocket_next_position ()
 	}
  }
 
-/*
- * square_root_binary_search : approximation for square root function
- *
- */
-
-int sqrt_cnt=0;	// loop protection counter
-
-// Newton-Raphson method
-//   NOTE: allowed accuracy of (1..-1) avoids infinite bounce between 1 and -1
-int32_t do_sqrt_with_accuracy(int32_t x, int32_t init_guess)
-{	int32_t next_guess;
-
-	if (++sqrt_cnt > 10) {
-		PRINT("#############SQRT_TOOMANY(%ld,%ld\n",x,init_guess);
-		return init_guess;
-	}
-	
-	// if we reach 0=init_guess, then the number and answer is zero
-	if (0 == init_guess) return 0;
-
-	next_guess = (init_guess + (x/init_guess))/2;
-	if (abs(init_guess - next_guess) < 2)
-		return(next_guess);
-	else
-		return(do_sqrt_with_accuracy(x, next_guess));
-};
-
-int32_t sqrt_with_accuracy(int32_t x, int32_t init_guess) {
-	sqrt_cnt=0;
-	return do_sqrt_with_accuracy(x, init_guess);
-}
-
 
 /*
  * compute_rocket_cable_lengths : compute the rocket position to cable lengths
@@ -315,20 +317,22 @@ int32_t sqrt_with_accuracy(int32_t x, int32_t init_guess) {
 
 /* #define LENGTH_SQRT_SCALER 1000
    #define LENGTH_SQRT_INIT    500 */
-#define LENGTH_SQRT_SCALER 100	/* Scale at 100 uM closely matches stepper 125nM step size */
-#define LENGTH_SQRT_INIT  5000
+#define LENGTH_SQRT_SCALER   6	/* 2^6 = 64, Scale at 100 uM closely matches stepper 125nM step size */
 
 static void do_compute_cable_length(int32_t tower) {
-	int32_t x,y,z,length;
+	int32_t x,y,z;
 
 	// we will use uMeter scaler for the intermedate calculation to avoid overflow
-	x=(r_space.rocket_goal_x - r_towers[tower].pos_x + r_towers[tower].mount_pos_x)/LENGTH_SQRT_SCALER;
-	y=(r_space.rocket_goal_y - r_towers[tower].pos_y + r_towers[tower].mount_pos_y)/LENGTH_SQRT_SCALER;
-	z=(r_space.rocket_goal_z - r_towers[tower].pos_z + r_towers[tower].mount_pos_z)/LENGTH_SQRT_SCALER;
-	r_towers[tower].length_goal = sqrt_with_accuracy((x*x)+(y*y)+(z*z),LENGTH_SQRT_INIT)*LENGTH_SQRT_SCALER;
+	// i.e. all numbers must be <= 65535 so that the square does not overflow
+	x=(r_space.rocket_goal_x - r_towers[tower].pos_x + r_towers[tower].mount_pos_x) >> LENGTH_SQRT_SCALER;
+	y=(r_space.rocket_goal_y - r_towers[tower].pos_y + r_towers[tower].mount_pos_y) >> LENGTH_SQRT_SCALER;
+	z=(r_space.rocket_goal_z - r_towers[tower].pos_z + r_towers[tower].mount_pos_z) >> LENGTH_SQRT_SCALER;
+	r_towers[tower].length_goal = sqrt_rocket((x*x)+(y*y)+(z*z)) << LENGTH_SQRT_SCALER;
 
-	// Calculate needed cable deployment change
-	length = r_towers[tower].length_goal - r_towers[tower].length;
+	// compute the matching step goal count
+	r_towers[tower].step_goal = micrometers2steps(tower,r_towers[tower].length_goal);
+	r_towers[tower].step_diff = r_towers[tower].step_goal - r_towers[tower].step_count;
+
 }
 
 void compute_rocket_cable_lengths ()
@@ -346,10 +350,10 @@ void compute_rocket_cable_lengths ()
 
 static void set_rocket_position ()
  {
-	r_towers[ROCKET_TOWER_NW].step_count = (r_towers[ROCKET_TOWER_NW].length_goal*10L) / ROCKET_TOWER_STEPS_PER_UM10;
-	r_towers[ROCKET_TOWER_NE].step_count = (r_towers[ROCKET_TOWER_NW].length_goal*10L) / ROCKET_TOWER_STEPS_PER_UM10;
-	r_towers[ROCKET_TOWER_SW].step_count = (r_towers[ROCKET_TOWER_NW].length_goal*10L) / ROCKET_TOWER_STEPS_PER_UM10;
-	r_towers[ROCKET_TOWER_SE].step_count = (r_towers[ROCKET_TOWER_NW].length_goal*10L) / ROCKET_TOWER_STEPS_PER_UM10;
+	r_towers[ROCKET_TOWER_NW].step_count =  micrometers2steps(ROCKET_TOWER_NW,r_towers[ROCKET_TOWER_NW].length_goal);
+	r_towers[ROCKET_TOWER_NE].step_count =  micrometers2steps(ROCKET_TOWER_NE,r_towers[ROCKET_TOWER_NE].length_goal);
+	r_towers[ROCKET_TOWER_SW].step_count =  micrometers2steps(ROCKET_TOWER_SW,r_towers[ROCKET_TOWER_SW].length_goal);
+	r_towers[ROCKET_TOWER_SE].step_count =  micrometers2steps(ROCKET_TOWER_SE,r_towers[ROCKET_TOWER_SE].length_goal);
 
 	if (IO_MOTOR_ENABLE && (GAME_SIMULATE != r_game.game_mode)) {
 		rocket_position_send();
@@ -365,10 +369,10 @@ static void set_rocket_position ()
 
 static void move_rocket_position ()
  {
-	r_towers[ROCKET_TOWER_NW].step_count = (r_towers[ROCKET_TOWER_NW].length_goal*10L) / ROCKET_TOWER_STEPS_PER_UM10;
-	r_towers[ROCKET_TOWER_NE].step_count = (r_towers[ROCKET_TOWER_NW].length_goal*10L) / ROCKET_TOWER_STEPS_PER_UM10;
-	r_towers[ROCKET_TOWER_SW].step_count = (r_towers[ROCKET_TOWER_NW].length_goal*10L) / ROCKET_TOWER_STEPS_PER_UM10;
-	r_towers[ROCKET_TOWER_SE].step_count = (r_towers[ROCKET_TOWER_NW].length_goal*10L) / ROCKET_TOWER_STEPS_PER_UM10;
+	r_towers[ROCKET_TOWER_NW].step_count =  micrometers2steps(ROCKET_TOWER_NW,r_towers[ROCKET_TOWER_NW].length_goal);
+	r_towers[ROCKET_TOWER_NE].step_count =  micrometers2steps(ROCKET_TOWER_NE,r_towers[ROCKET_TOWER_NE].length_goal);
+	r_towers[ROCKET_TOWER_SW].step_count =  micrometers2steps(ROCKET_TOWER_SW,r_towers[ROCKET_TOWER_SW].length_goal);
+	r_towers[ROCKET_TOWER_SE].step_count =  micrometers2steps(ROCKET_TOWER_SE,r_towers[ROCKET_TOWER_SE].length_goal);
 
 	if (IO_MOTOR_ENABLE && (GAME_SIMULATE != r_game.game_mode)) {
 		rocket_position_send();
@@ -382,12 +386,8 @@ static void move_rocket_position ()
  */
 
 static void do_move_tower(struct ROCKET_TOWER_S *tower) {
-	int32_t step_goal;
 	tower->length = tower->length_goal;
-
-	step_goal = (tower->length_goal *10L)/ROCKET_TOWER_STEPS_PER_UM10;
-	tower->step_diff = step_goal - tower->step_count;
-	tower->step_count = step_goal;
+	tower->step_count = tower->step_goal;
 }
 
 void move_rocket_next_position ()
@@ -451,17 +451,19 @@ void rocket_increment_send (int32_t increment_nw, int32_t increment_ne, int32_t 
  {
 	uint8_t buf[10];
 
-	buf[0]=(uint8_t) ROCKET_MOTOR_CMD_NEXT;
-	buf[1]=(uint8_t) ((increment_nw & 0x00ff00L) >> 8);
-	buf[2]=(uint8_t) ((increment_nw & 0x0000ffL)     );
-	buf[3]=(uint8_t) ((increment_ne & 0x00ff00L) >> 8);
-	buf[4]=(uint8_t) ((increment_ne & 0x0000ffL)     );
-	buf[5]=(uint8_t) ((increment_sw & 0x00ff00L) >> 8);
-	buf[6]=(uint8_t) ((increment_sw & 0x0000ffL)     );
-	buf[7]=(uint8_t) ((increment_se & 0x00ff00L) >> 8);
-	buf[8]=(uint8_t) ((increment_se & 0x0000ffL)     );
-
-	i2c_polling_write (i2c, buf, 9, ROCKET_MOTOR_I2C_ADDRESS);
+	// only move if something changed
+	if (increment_nw || increment_ne || increment_sw || increment_se) {
+		buf[0]=(uint8_t) ROCKET_MOTOR_CMD_NEXT;
+		buf[1]=(uint8_t) ((increment_nw & 0x00ff00L) >> 8);
+		buf[2]=(uint8_t) ((increment_nw & 0x0000ffL)     );
+		buf[3]=(uint8_t) ((increment_ne & 0x00ff00L) >> 8);
+		buf[4]=(uint8_t) ((increment_ne & 0x0000ffL)     );
+		buf[5]=(uint8_t) ((increment_sw & 0x00ff00L) >> 8);
+		buf[6]=(uint8_t) ((increment_sw & 0x0000ffL)     );
+		buf[7]=(uint8_t) ((increment_se & 0x00ff00L) >> 8);
+		buf[8]=(uint8_t) ((increment_se & 0x0000ffL)     );
+		i2c_polling_write (i2c, buf, 9, ROCKET_MOTOR_I2C_ADDRESS);
+	}
  }
 
 /*
