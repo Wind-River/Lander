@@ -16,11 +16,13 @@
  * </legal-notice>
  */
  
-
+#ifndef boolean
+typedef char boolean;
+#endif
 
 // General Enablement
 
-#define IO_BUTTON_BRINGUP			true	// init state to display I/O button values
+#define IO_BUTTON_BRINGUP			true	// init state to display I/O button and slider values
 
 #define IO_BUTTONS_ENABLE			true	// enable the buttons to change state
 #define IO_JOYSTICK_ENABLE			true	// enable the joystick for X-Y
@@ -31,11 +33,11 @@
 
 #define IO_REMOTE_ENABLE			false	// enable the sister i2c-slave board
 											// NOTE: the connection and remote board must be up else we will hang in "setup.c"
-#define IO_LEDS_REMOTE_ENABLE		true	// enable the LED space lighting
-#define IO_NEO_REMOTE_ENABLE		true	// enable the NeoPixels space lighting
-#define IO_SOUND_REMOTE_ENABLE		true	// enable the sound effects device
-#define IO_TRACKER_REMOTE_ENABLE	false	// enable the Pan&Tilt 'antenae' device
-#define IO_LEDRGB_REMOTE_ENABLE		false	// enable the LED_RGB 'antenae' device
+#define IO_LEDS_REMOTE_ENABLE		true	// enable the remote LED space lighting
+#define IO_NEO_REMOTE_ENABLE		true	// enable the remote NeoPixels space lighting
+#define IO_SOUND_REMOTE_ENABLE		true	// enable the remote sound effects device
+#define IO_TRACKER_REMOTE_ENABLE	false	// enable the remote Pan&Tilt 'antenae' device
+#define IO_LEDRGB_REMOTE_ENABLE		false	// enable the remote LED_RGB 'antenae status' device
 
 // Debugging
 #define DEBUG_TIMING_ENABLE			true	// enable the timing measurements for QOS
@@ -196,6 +198,7 @@ struct ROCKET_CONTROL_S {
 #define PRINT           printk
 #endif
 
+
 extern struct ROCKET_GAME_S r_game;
 extern struct ROCKET_CONTROL_S r_control;
 extern bool verbose;
@@ -208,7 +211,7 @@ extern void log_val(char *format, void *val);
 extern int32_t abs(int32_t val);
 
 void send_LED_Backpack(uint32_t x);
-void send_I2c_slave(uint8_t *buffer,uint8_t i2c_len);
+void send_rocket_display(uint8_t *buffer,uint8_t i2c_len);
 void send_Led1(uint32_t value);
 void send_Led2(uint32_t value);
 void send_NeoPixel(uint32_t pattern);
