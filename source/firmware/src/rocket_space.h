@@ -99,8 +99,8 @@
 #define ROCKET_TOWER_SPOOL_STEPS  200L
 
 // Spindle: diameter = 8 mm, circumference = 3.141 * 8 mm = 25.128, uM/step = (25.128 * 1000)/200 = 125.64 uM/step
-#define ROCKET_TOWER_STEPS_PER_UM10  1256L  // 125.6 * 10 uMx10 per step (grab one more digit of integer math precision)
-#define UM10_PER_MILLIMETER          10000L // 1000  * 10 uMx10 per millimeter
+#define ROCKET_TOWER_STEP_PER_UM10  1256L // 125.6 * 10 uMx10 per step (grab one more digit of integer math precision)
+#define UM10_PER_MILLIMETER        10000L // 1000  * 10 uMx10 per millimeter
 
 // Motor speed: assume auto speed
 #define MOTOR_SPEED_AUTO         0  // speed is auto-calculated per frame
@@ -109,21 +109,27 @@
 // Exported Structures and Funtions
 
 struct ROCKET_TOWER_S {
+	const char* name;		// name of the tower
 	int32_t	i2c_address;	// address of the tower's stepper controller
 
 	int32_t	pos_x;			// position of tower pulley point
 	int32_t	pos_y;
 	int32_t	pos_z;
 
-	int32_t	mount_pos_x;	// offset of rouck mount point
+	int32_t	mount_pos_x;	// offset of rocket mount point (uM)
 	int32_t	mount_pos_y;
 	int32_t	mount_pos_z;
 
-	int32_t	length;			// string deploy length current
-	int32_t	length_goal;	// string deploy length goal
+	int32_t	length;			// string deploy length current (uM)
+	int32_t	length_goal;	// string deploy length goal    (uM)
 
 	int32_t	step_count;		// calculated tower motor step count
-	int32_t	step_diff;		// next tower motor step move
+	int32_t	step_goal;		// calculated tower motor step goal
+	int32_t	step_diff;		// tower motor's next step move
+
+	int32_t	um2step_slope;	// linear equation for um per step
+	int32_t	um2step_scaler;	// scale the slope for extra digits of precision
+	int32_t	um2step_offset;	// 
 
 	int32_t	speed;			// stepper motor speed
 };
@@ -150,16 +156,16 @@ struct ROCKET_SPACE_S {
 };
 
 /* commands to Rocket Motor board */
-#define ROCKET_MOTOR_CMD_GO     'g'
-#define ROCKET_MOTOR_CMD_STOP   's'
-#define ROCKET_MOTOR_CMD_PRESET 'p'
-#define ROCKET_MOTOR_CMD_DEST   'd'
-#define ROCKET_MOTOR_CMD_NEXT   'n'
+#define ROCKET_MOTOR_CMD_GO     	'g'
+#define ROCKET_MOTOR_CMD_STOP   	's'
+#define ROCKET_MOTOR_CMD_PRESET 	'p'
+#define ROCKET_MOTOR_CMD_DEST   	'd'
+#define ROCKET_MOTOR_CMD_NEXT   	'n'
+#define ROCKET_MOTOR_CMD_NORMAL		'N'
+#define ROCKET_MOTOR_CMD_CALIBRATE	'C'
 
 extern struct ROCKET_SPACE_S r_space;
 extern struct ROCKET_TOWER_S r_towers[ROCKET_TOWER_MAX];
-
-extern int sqrt_cnt;
 
 bool init_rocket_hardware();
 void init_rocket_game (int32_t pos_x, int32_t pos_y, int32_t pos_z, int32_t fuel, int32_t gravity, int32_t mode);
@@ -174,5 +180,4 @@ void rocket_increment_send(int32_t increment_nw, int32_t increment_ne, int32_t i
 void rocket_position_send();
 void rocket_command_send(uint8_t command);
 
-int32_t sqrt_with_accuracy(int32_t x, int32_t init_guess);
 
