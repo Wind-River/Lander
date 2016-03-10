@@ -104,6 +104,8 @@
 /* Timing objects */
 MicroAve ave_i2c;
 MicroAve ave_loop;
+MicroAve ave_update;
+MicroAve ave_latency;
 
 /* Debugging */
 #define VERBOSE_MAX 3
@@ -352,7 +354,7 @@ void Motor::step_loop(uint16_t u_sec_passed) {
     }
 
     // test limits (if not in calibrate mode)
-    if (0x00 = Motor::mode & MOTOR_CALIBRATE_MODE) {
+    if (0x00 == (Motor::mode & MOTOR_CALIBRATE_MODE)) {
       if (step_destination < MOTOR_DEST_MIN)
         step_destination = MOTOR_DEST_MIN;
       if (step_destination > MOTOR_DEST_MAX)
@@ -400,6 +402,12 @@ void Motor::step_loop(uint16_t u_sec_passed) {
   if ((enable_motion                                   ) &&
       (step_location        != step_destination        ) &&
       (step_speed_timecount >= step_speed_timecount_max) ) {
+
+    // capture the latency
+    if (ENABLE_TIMING) {
+      ave_latency.addValue(step_speed_timecount - step_speed_timecount_max);
+    }
+    
     // step_speed_timecount = step_speed_timecount - step_speed_timecount_max;
     step_speed_timecount = 0;
     
@@ -440,13 +448,9 @@ void Motor::displayStatus() {
   Serial.print(pin_a);
   Serial.print(",");
   Serial.print(pin_b);
-  Serial.print(") location=0x");
-  Serial.print(step_location,HEX);
-  Serial.print(",");
+  Serial.print(") location=");
   Serial.print(step_location);
-  Serial.print(" steps, dest=0x");
-  Serial.print(step_destination,HEX);
-  Serial.print(",");
+  Serial.print(" steps, dest=");
   Serial.print(step_destination);
   Serial.print(" steps, speed:");
   Serial.print(step_speed_timecount_max);
@@ -476,6 +480,10 @@ void setup() {
     Wire.onRequest(requestEvent); // register the I2C request event
   }
 
+  // set the motor update refresh time thresholds
+  // normal refresh is 200uS, assume 300uS means the user has paused
+  ave_update.setThreshold(0,300);
+  
   Serial.println("Setup Done!");
   show_help();
   
@@ -783,6 +791,8 @@ void display_debug() {
     ave_loop.displayResults("loop",true);
     ave_i2c.displayResults("i2c",true);
   }
+  ave_update.displayResults("Inc_loop",false);
+  ave_latency.displayResults("Latency",true);
 }
 
 // 
@@ -867,6 +877,10 @@ void receiveEvent(int16_t howMany) {
       req_step_increment = (((int32_t) buffer[7]) << 8) | ((int32_t) buffer[8]);
       if (buffer[7] & 0x80) req_step_increment |= 0xffff0000L;
       motor_se.move_next(req_step_increment,MOTOR_SPEED_AUTO);
+      if (ENABLE_TIMING) {
+        ave_update.setStop();
+        ave_update.setStart();
+      }
     }
 
     // set up a specific motor location and/or destination
@@ -969,3 +983,4 @@ void requestEvent() {
   }
 
 }
+
