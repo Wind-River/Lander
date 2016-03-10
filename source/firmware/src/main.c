@@ -18,14 +18,26 @@
  
 
 /*
- * Microkernel demo of a Rocket Lander Game
+ * Theory of Implementation
  *
- *  Features: I2C by displaying information on a Grove-LCD
- *            Digital I/O on a Grove-Buttons
- *            Analog I/O on a Grove-Joystick
- *            X-Y-Z Stepper Motor Control on XXX
- *            Pan and Tilt Servos
- *            I2C control on a Grove-LED_RGB
+ *  Features: Grove 16x2 LCD (ic2)
+ *            Two Digital I/O for Buttons
+ *            Analog I/O on a Joystick (X-Y)
+ *            Analog I/O on a slider (Z)
+ *            2 PWM Control for Pan and Tilt Servos (antennae)
+ *            Daughter Arduino controller for 4 tower stepper motor control (Rocket Motor)
+ *            Daughter Arduino controller for: (Rocket Display)
+ *               Grove-LED_RGB (antennae status)
+ *               Adafruit large 4 digit LED display (Fuel)
+ *               Grove 4 digit LED displays (speed,height)
+ *               Adafruit Neo-Pixel strips (lighting)
+ *               Adafruit Sound card (effects)
+ *
+ * Main manages:
+ *   - I/O bringup
+ *   - Main loop (at 1/5 second)
+ *   - Core I/O inputs (buttons and slider)
+ *   - Rocket Display daughter board management
  *
  * The green LED on the Galileo2 board next to the USB connector flashes
  * continuously to show a heartbeat.
@@ -237,7 +249,7 @@ void send_LED_Backpack(uint32_t x) {
  *
  */
 
-void send_I2c_slave(uint8_t *buffer,uint8_t i2c_len) {
+void send_rocket_display(uint8_t *buffer,uint8_t i2c_len) {
 	if (IO_REMOTE_ENABLE) {
 		i2c_polling_write (i2c, buffer, i2c_len, ROCKET_DISPLAY_I2C_ADDRESS);
 	}
@@ -258,7 +270,7 @@ void send_Led1(uint32_t value) {
 			buf[i]=value % 10;
 			value /= 10;
 		}
-		send_I2c_slave(buf,5);
+		send_rocket_display(buf,5);
 	}
 }
 
@@ -276,7 +288,7 @@ void send_Led2(uint32_t value) {
 			buf[i]=value % 10;
 			value /= 10;
 		}
-		send_I2c_slave(buf,5);
+		send_rocket_display(buf,5);
 	}
 }
 
@@ -296,7 +308,7 @@ void send_Led_Rgb(uint32_t r,uint32_t g,uint32_t b) {
 		buf[1]=(uint8_t) r;
 		buf[2]=(uint8_t) g;
 		buf[2]=(uint8_t) b;
-		send_I2c_slave(buf,3);
+		send_rocket_display(buf,3);
 	}
 }
 
@@ -310,7 +322,7 @@ void send_NeoPixel(uint32_t value) {
 	if (IO_NEO_REMOTE_ENABLE) {
 		buf[0]='n';
 		buf[1]=(uint8_t) value;
-		send_I2c_slave(buf,2);
+		send_rocket_display(buf,2);
 	}
 }
 
@@ -325,7 +337,7 @@ void send_Sound(uint32_t value) {
 		PRINT("** Sound: %d ***",value);
 		buf[0]='s';
 		buf[1]=(uint8_t) value;
-		send_I2c_slave(buf,2);
+		send_rocket_display(buf,2);
 	}
 }
 
@@ -350,7 +362,7 @@ void send_Pan_Tilt(uint32_t pan,uint32_t tilt) {
 		buf[0]='p';
 		buf[1]=(uint8_t) pan;
 		buf[2]=(uint8_t) tilt;
-		send_I2c_slave(buf,3);
+		send_rocket_display(buf,3);
 	}
 }
 
@@ -449,9 +461,11 @@ void init_main() {
  *
  */
  
- void main_time_test(uint32_t time_start,uint32_t time_stop) {
+ void main_time_test(uint32_t time_start,uint32_t time_stop,uint32_t time_cycle_start,uint32_t time_cycle_stop) {
 	static uint32_t time_sum = 0L;
 	static uint32_t time_cnt = 0L;
+	static uint32_t time_cycle_sum = 0L;
+	static uint32_t time_cycle_cnt = 0L;
 	static uint32_t time_max3 = 0L;
 	static uint32_t time_max2 = 0L;
 	static uint32_t time_max1 = 0L;
@@ -463,6 +477,10 @@ void init_main() {
 		if (time_cnt > 0) {
 			time_diff = time_stop - time_start;
 			time_sum += time_diff;
+			if (time_cycle_stop > time_cycle_start) {
+				time_cycle_cnt++;
+				time_cycle_sum += time_cycle_stop - time_cycle_start;
+			}
 			
 			if (time_diff > time_max3) {
 			    time_max1 = time_max2;
@@ -477,7 +495,7 @@ void init_main() {
 	
 			// display time ave every 64 * 1/5 second ~= 13 seconds
 			if (0x0000 == (time_cnt & 0x003f)) {
-				PRINT("*** Main_Time(%ld) = %ld / %ld, %ld < %ld < %ld\n",time_cnt,time_sum/time_cnt,sys_clock_ticks_per_sec,time_max3,time_max2,time_max1);
+				PRINT("*** Main_Time(%ld) = %ld:%ld / %ld, %ld < %ld < %ld\n",time_cnt,time_sum/time_cnt,time_cycle_sum/time_cycle_cnt,sys_clock_ticks_per_sec,time_max3,time_max2,time_max1);
 			}
 		}
 	}
@@ -487,7 +505,7 @@ void init_main() {
 void main() {
     bool flag = false;
    	uint32_t time_start,time_stop;
-
+	uint32_t time_cycle_start,time_cycle_stop;
 
 	init_main();
 	init_state();
@@ -514,6 +532,7 @@ void main() {
         	
 		/* get the time at start of loop */
 	   	time_start = task_tick_get_32();
+	   	time_cycle_start = task_cycle_get_32();
 
         /* Blink the on-board LED */
         if (flag)
@@ -535,7 +554,8 @@ void main() {
 
         /* wait a while to loop again, less the time spent in loop */
 	   	time_stop = task_tick_get_32();
-		main_time_test(time_start,time_stop);
+	   	time_cycle_stop = task_cycle_get_32();
+		main_time_test(time_start,time_stop,time_cycle_start,time_cycle_stop);
 	   	if (time_stop < time_start) {
 	   		/* time counter looped, use default delay */
 	        task_sleep(SLEEPTICKS - 1);
