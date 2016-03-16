@@ -153,6 +153,7 @@ struct ROCKET_SPACE_S {
 	int32_t	thrust_y;
 	int32_t	thrust_z;
 
+	int32_t	speed_max;			//  minimum usec per step
 };
 
 /* commands to Rocket Motor board */
