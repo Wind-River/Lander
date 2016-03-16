@@ -129,9 +129,11 @@ struct ROCKET_TOWER_S r_towers[ROCKET_TOWER_MAX] = {
 
 bool init_rocket_hardware () {
 
-	r_space.rocket_x = 0;			// current game-space rocket position, in uMeters
+	r_space.rocket_x = 0;		// current game-space rocket position, in uMeters
 	r_space.rocket_y = 0;
 	r_space.rocket_z = 0;
+	
+	r_space.speed_max = 1250;  	// minimum microseconds per step => maximum speed (mSec) = 240 rpm (NOTE:1000 mSec too fast for NEMA-17)
 
 	// 
 	//compute_tower_step_to_nm(&r_towers);
@@ -482,13 +484,28 @@ static void do_rocket_position_send (uint8_t tower_number, struct ROCKET_TOWER_S
 	i2c_polling_write (i2c, buf, 5, ROCKET_MOTOR_I2C_ADDRESS);
  }
 
-void rocket_position_send ()
+void x_rocket_position_send ()
 {
 	do_rocket_position_send('1',&r_towers[ROCKET_TOWER_NW]);
 	do_rocket_position_send('2',&r_towers[ROCKET_TOWER_NE]);
 	do_rocket_position_send('3',&r_towers[ROCKET_TOWER_SW]);
 	do_rocket_position_send('4',&r_towers[ROCKET_TOWER_SE]);
 }
+
+void rocket_position_send ()
+ {
+	uint8_t buf[10];
+	buf[0]=(uint8_t) 'l';
+	buf[1]=(uint8_t) ((r_towers[ROCKET_TOWER_NW].step_count & 0x00ff00L) >> 8);
+	buf[2]=(uint8_t) ((r_towers[ROCKET_TOWER_NW].step_count & 0x0000ffL)     );
+	buf[3]=(uint8_t) ((r_towers[ROCKET_TOWER_NE].step_count & 0x00ff00L) >> 8);
+	buf[4]=(uint8_t) ((r_towers[ROCKET_TOWER_NE].step_count & 0x0000ffL)     );
+	buf[5]=(uint8_t) ((r_towers[ROCKET_TOWER_SW].step_count & 0x00ff00L) >> 8);
+	buf[6]=(uint8_t) ((r_towers[ROCKET_TOWER_SW].step_count & 0x0000ffL)     );
+	buf[7]=(uint8_t) ((r_towers[ROCKET_TOWER_SE].step_count & 0x00ff00L) >> 8);
+	buf[8]=(uint8_t) ((r_towers[ROCKET_TOWER_SE].step_count & 0x0000ffL)     );
+	i2c_polling_write (i2c, buf, 9, ROCKET_MOTOR_I2C_ADDRESS);
+ }
 
 /*
  * rocket_command_send : send a motor command
