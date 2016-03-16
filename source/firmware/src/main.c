@@ -379,19 +379,19 @@ void init_game () {
 	// display the setup game state
 	if        (r_game.game == GAME_Z_LAND) {
 		sprintf(buffer," Game: Land Z!");
-		set_lcd_display(0,buffer);
+		set_lcd_display(LCD_BUFFER_1,buffer);
 	} else if (r_game.game == GAME_XYZ_LAND) {
 		sprintf(buffer," Game: Land Z!");
-		set_lcd_display(0,buffer);
+		set_lcd_display(LCD_BUFFER_1,buffer);
 	} else if (r_game.game == GAME_XYZ_FLIGHT) {
 		sprintf(buffer," Game: Land Z!");
-		set_lcd_display(0,buffer);
+		set_lcd_display(LCD_BUFFER_1,buffer);
 	} else if (r_game.game == GAME_COME_HITHER) {
 		sprintf(buffer," Game: Land Z!");
-		set_lcd_display(0,buffer);
+		set_lcd_display(LCD_BUFFER_1,buffer);
 	} else if (r_game.game == GAME_COME_HITHER) {
 		sprintf(buffer," Game: Unknown :-(");
-		set_lcd_display(0,buffer);
+		set_lcd_display(LCD_BUFFER_1,buffer);
 	}
 	set_lcd_display(1," waiting ... " );
 
@@ -415,7 +415,7 @@ void init_game () {
 	} else if (r_game.game == GAME_XYZ_AUTO) {
 		init_rocket_game(init_x, init_y, GAME_Z_POS_MAX, r_game.fuel_option, r_game.gravity_option,GAME_PLAY);
 	} else if (r_game.game == GAME_XYZ_MOVE) {
-		init_rocket_game(init_x, init_y, GAME_Z_POS_MAX/2, r_game.fuel_option, r_game.gravity_option,GAME_PLAY);
+		init_rocket_game(init_x, init_y, 0 /* GAME_Z_POS_MAX/2 */, r_game.fuel_option, r_game.gravity_option,GAME_PLAY);
 	} else {
 		init_rocket_game(init_x, init_y, GAME_Z_POS_MAX, r_game.fuel_option, r_game.gravity_option,GAME_PLAY);
 	}
@@ -562,6 +562,8 @@ void main() {
 	   	} else if (SLEEPTICKS <= (time_stop - time_start)) {
 	        /* no sleep for the busy */
 	   	} else {
+	   		uint32_t a=SLEEPTICKS;
+	   		uint32_t b=time_stop - time_start;
 	   		/* sleep the balance, rounding down one tick */
 	        task_sleep(SLEEPTICKS - (time_stop - time_start) - 1);
         }
