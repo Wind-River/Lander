@@ -37,6 +37,7 @@
 #include <stdbool.h>
 
 #include "rocket.h"
+#include "rocket_state.h"
 #include "rocket_space.h"
 #include "rocket_math.h" 
 
@@ -211,7 +212,7 @@ void compass_adjustment(uint8_t command, struct CompassRec *compass) {
 			compass->z= 100000L;
 		} else if ((x_delta > 0) && (y_delta < 0)) {
 			compass->name = "SE+10";
-			compass->x=-100000L;
+			compass->x= 100000L;
 			compass->y=-100000L;
 			compass->z= 100000L;
 		} else if ((x_delta == 0) && (y_delta < 0)) {
@@ -235,6 +236,24 @@ void compass_adjustment(uint8_t command, struct CompassRec *compass) {
 			compass->x= 0L;
 			compass->y= 0L;
 			compass->z= 0L;
+		}
+	} else if (COMPASS_CALC_CIRC ==  command) {
+		if        ((x_delta < 0) && (y_delta > 0)) {
+			compass->name = "Z";
+		} else if ((x_delta == 0) && (y_delta > 0)) {
+			compass->name = "Z";
+		} else if ((x_delta > 0) && (y_delta > 0)) {
+			compass->name = "Z";
+		} else if ((x_delta > 0) && (y_delta == 0)) {
+			compass->name = "Y";
+		} else if ((x_delta > 0) && (y_delta < 0)) {
+			compass->name = "X";
+		} else if ((x_delta == 0) && (y_delta < 0)) {
+			compass->name = "A";
+		} else if ((x_delta < 0) && (y_delta < 0)) {
+			compass->name = " ";
+		} else if ((x_delta < 0) && (y_delta == 0)) {
+			compass->name = " ";
 		}
 	} else {
 		if        ((x_delta < 0) && (y_delta > 0)) {
@@ -377,3 +396,308 @@ void compute_tower_step_to_nm() {
 	samples_least_squares(samples_nw, 2, &r_towers[ROCKET_TOWER_SW]);
 	samples_least_squares(samples_nw, 2, &r_towers[ROCKET_TOWER_SE]);
 }
+
+/*
+ * trigonomety tables, using linear interpolation
+ *
+ */
+
+struct MATH_TABLE {
+	double degrees;
+	double value;
+};
+
+#define MATH_TABLE_MAX 37
+
+struct MATH_TABLE cosine_table[MATH_TABLE_MAX] = {
+  {  0,  1.000000 },
+  { 10,  0.984808 },
+  { 20,  0.939693 },
+  { 30,  0.866025 },
+  { 40,  0.766044 },
+  { 50,  0.642788 },
+  { 60,  0.500000 },
+  { 70,  0.342020 },
+  { 80,  0.173648 },
+  { 90,  0.000000 },
+  { 100, -0.173648 },
+  { 110, -0.342020 },
+  { 120, -0.500000 },
+  { 130, -0.642788 },
+  { 140, -0.766044 },
+  { 150, -0.866025 },
+  { 160, -0.939693 },
+  { 170, -0.984808 },
+  { 180, -1.000000 },
+  { 190, -0.984808 },
+  { 200, -0.939693 },
+  { 210, -0.866025 },
+  { 220, -0.766044 },
+  { 230, -0.642788 },
+  { 240, -0.500000 },
+  { 250, -0.342020 },
+  { 260, -0.173648 },
+  { 270, -0.000000 },
+  { 280,  0.173648 },
+  { 290,  0.342020 },
+  { 300,  0.500000 },
+  { 310,  0.642788 },
+  { 320,  0.766044 },
+  { 330,  0.866025 },
+  { 340,  0.939693 },
+  { 350,  0.984808 },
+  { 360,  1.000000 },
+};
+
+struct MATH_TABLE sine_table[MATH_TABLE_MAX] = {
+  {  0,  0.000000 },
+  { 10,  0.173648 },
+  { 20,  0.342020 },
+  { 30,  0.500000 },
+  { 40,  0.642788 },
+  { 50,  0.766044 },
+  { 60,  0.866025 },
+  { 70,  0.939693 },
+  { 80,  0.984808 },
+  { 90,  1.000000 },
+  { 100,  0.984808 },
+  { 110,  0.939693 },
+  { 120,  0.866025 },
+  { 130,  0.766044 },
+  { 140,  0.642788 },
+  { 150,  0.500000 },
+  { 160,  0.342020 },
+  { 170,  0.173648 },
+  { 180,  0.000000 },
+  { 190, -0.173648 },
+  { 200, -0.342020 },
+  { 210, -0.500000 },
+  { 220, -0.642788 },
+  { 230, -0.766044 },
+  { 240, -0.866025 },
+  { 250, -0.939693 },
+  { 260, -0.984808 },
+  { 270, -1.000000 },
+  { 280, -0.984808 },
+  { 290, -0.939693 },
+  { 300, -0.866025 },
+  { 310, -0.766044 },
+  { 320, -0.642788 },
+  { 330, -0.500000 },
+  { 340, -0.342020 },
+  { 350, -0.173648 },
+  { 360, -0.000000 },
+};
+
+#define MATH_ATAN_MAX 44
+
+struct MATH_TABLE tan_table[MATH_ATAN_MAX] = {
+  { -86,-14.300666 },
+  { -82, -7.115370 },
+  { -78, -4.704630 },
+  { -74, -3.487414 },
+  { -70, -2.747477 },
+  { -66, -2.246037 },
+  { -62, -1.880726 },
+  { -58, -1.600335 },
+  { -54, -1.376382 },
+  { -50, -1.191754 },
+  { -46, -1.035530 },
+  { -42, -0.900404 },
+  { -38, -0.781286 },
+  { -34, -0.674509 },
+  { -30, -0.577350 },
+  { -26, -0.487733 },
+  { -22, -0.404026 },
+  { -18, -0.324920 },
+  { -14, -0.249328 },
+  { -10, -0.176327 },
+  { -6, -0.105104 },
+  { -2, -0.034921 },
+  {  2,  0.034921 },
+  {  6,  0.105104 },
+  { 10,  0.176327 },
+  { 14,  0.249328 },
+  { 18,  0.324920 },
+  { 22,  0.404026 },
+  { 26,  0.487733 },
+  { 30,  0.577350 },
+  { 34,  0.674509 },
+  { 38,  0.781286 },
+  { 42,  0.900404 },
+  { 46,  1.035530 },
+  { 50,  1.191754 },
+  { 54,  1.376382 },
+  { 58,  1.600335 },
+  { 62,  1.880726 },
+  { 66,  2.246037 },
+  { 70,  2.747477 },
+  { 74,  3.487414 },
+  { 78,  4.704630 },
+  { 82,  7.115370 },
+  { 86, 14.300666 },
+};
+
+double degrees2cosine(int16_t degrees) {
+	for (int i=0;i<MATH_TABLE_MAX;i++) {
+		if (degrees < cosine_table[i+1].degrees) {
+			double degree_part = (degrees - cosine_table[i].degrees)/(cosine_table[i+1].degrees-cosine_table[i].degrees);
+			return ((((cosine_table[i+1].value-cosine_table[i].value)) * degree_part) + cosine_table[i].value);
+		}
+	}
+	return(1.0);
+};
+
+double degrees2sine(int16_t degrees) {
+	for (int i=0;i<MATH_TABLE_MAX;i++) {
+		if (degrees < sine_table[i+1].degrees) {
+			double degree_part = (degrees - sine_table[i].degrees)/(sine_table[i+1].degrees-sine_table[i].degrees);
+			return ((((sine_table[i+1].value-sine_table[i].value)) * degree_part) + sine_table[i].value);
+		}
+	}
+	return(0.0);
+};
+
+int16_t atan2degrees(double x, double y) {
+	double value;
+
+	if (y < 0.0001) y = 0.0001;
+	value = x/y;
+
+	if (value < -14.300666) return(-90);
+	if (value >  14.300666) return( 90);
+	
+	for (int i=0;i<MATH_ATAN_MAX;i++) {
+		if (value < tan_table[i+1].value) {
+			double value_scale = (value - tan_table[i].value)/(tan_table[i+1].value-tan_table[i].value);
+			double degree_part = (double) (tan_table[i+1].degrees-tan_table[i].degrees);
+			return ((int16_t) ((degree_part * value_scale) + tan_table[i].degrees+ 0.5));
+		}
+	}
+	return(0);
+};
+
+
+/*
+ * flight_length
+ *
+ */
+
+#define LENGTH_SQRT_SCALER   6	/* 2^6 = 64, Scale at 100 uM closely matches stepper 125nM step size */
+
+static int32_t get_length(int32_t pos_x, int32_t pos_y, int32_t pos_z, int32_t goal_x, int32_t goal_y, int32_t goal_z) {
+	int32_t x,y,z;
+
+	// we will use uMeter scaler for the intermedate calculation to avoid overflow
+	// i.e. all numbers must be <= 65535 so that the square does not overflow
+	x=(goal_x - pos_x) >> LENGTH_SQRT_SCALER;
+	y=(goal_y - pos_y) >> LENGTH_SQRT_SCALER;
+	z=(goal_z - pos_z) >> LENGTH_SQRT_SCALER;
+	return(sqrt_rocket((x*x)+(y*y)+(z*z)) << LENGTH_SQRT_SCALER);
+}
+
+/*
+ * flight_linear
+ *
+ */
+
+struct ROCKET_FLIGHT_S r_flight;
+
+void flight_init () {
+	r_flight.dx=0; r_flight.dy=0; r_flight.dz=0;
+	r_flight.ax=0; r_flight.ay=0; r_flight.az=0;
+	r_flight.speed=DEFAULT_SPEED;
+	r_flight.current_x=0; r_flight.current_y=0; r_flight.current_z=0;
+	r_flight.final_x  =0; r_flight.final_y  =0; r_flight.final_z  =0;
+	r_flight.frame_count=0;
+	r_flight.frame_max  =0;
+	r_flight.state_done=STATE_NOP;	
+ }
+
+/* speed is millimeters per second 
+ * Given that the tower cable speed max is 4 rps * 200 steps/rpm * 125.6 uM/step = 100 mm/sec,
+ * let us suggest a safe and sane speed of 80 mm/sec, which is 16 mm per frame
+ */
+
+#define DEFAULT_LINEAR_MM_PER_SECOND 50
+
+void flight_linear (int32_t dest_x,int32_t dest_y,int32_t dest_z, int32_t speed) {
+	int32_t length;
+	
+	flight_init();
+	
+	r_flight.final_x = dest_x; 
+	r_flight.final_y = dest_y; 
+	r_flight.final_z = dest_z;
+
+	r_flight.current_x=r_space.rocket_x; 
+	r_flight.current_y=r_space.rocket_y; 
+	r_flight.current_z=r_space.rocket_z;
+
+	length = get_length(
+		r_space.rocket_x,
+		r_space.rocket_y,
+		r_space.rocket_z,
+		dest_x,
+		dest_y,
+		dest_z);
+	if (0 == length) {
+		return;
+	}
+	
+	if (MOTOR_SPEED_AUTO == speed) {
+		speed = DEFAULT_LINEAR_MM_PER_SECOND;
+	}
+	r_flight.frame_max = (length/1000L)/(speed/FRAMES_PER_SECOND);	
+	r_flight.dx=(dest_x-r_flight.current_x)/r_flight.frame_max;
+	r_flight.dy=(dest_y-r_flight.current_y)/r_flight.frame_max;
+	r_flight.dz=(dest_z-r_flight.current_z)/r_flight.frame_max;
+}
+
+void flight_linear_loop () {
+	r_flight.frame_count++;
+	
+	if (r_flight.frame_count < r_flight.frame_max) {
+		r_flight.current_x += r_flight.dx; 
+		r_flight.current_y += r_flight.dy; 
+		r_flight.current_z += r_flight.dz;
+	} else {
+		// if last step, jump to the end (and resolve roundoff errors)
+		r_flight.current_x = r_flight.final_x; 
+		r_flight.current_y = r_flight.final_y; 
+		r_flight.current_z = r_flight.final_z;
+	}
+	
+	r_space.rocket_goal_x = r_flight.current_x;
+	r_space.rocket_goal_y = r_flight.current_y;
+	r_space.rocket_goal_z = r_flight.current_z;
+	compute_rocket_cable_lengths();
+	move_rocket_next_position();
+
+}
+
+void flight_wait (int32_t frame_count) {
+	flight_init();
+
+	r_flight.final_x = r_space.rocket_x; 
+	r_flight.final_y = r_space.rocket_y; 
+	r_flight.final_z = r_space.rocket_z;
+
+	r_flight.current_x=r_flight.final_x; 
+	r_flight.current_y=r_flight.final_y; 
+	r_flight.current_z=r_flight.final_z;
+	
+	r_flight.frame_max = frame_count;
+}
+
+void flight_wait_loop () {
+	r_flight.frame_count++;
+}
+
+void flight_circular (int32_t ax,int32_t ay,int32_t az, int32_t center_x, int32_t center_y, int32_t center_z, int32_t frame_count) {
+
+}
+
+void flight_circular_loop () {
+	
+} 
