@@ -55,6 +55,7 @@ typedef char boolean;
 #define SLEEPTIME  200
 #define SLEEPTICKS (SLEEPTIME * sys_clock_ticks_per_sec / 1000)
 #define TIME_LOOPS_PER_SECOND	5
+#define FRAMES_PER_SECOND		5
 
 /* Specific loop count timeouts per action */
 #define XYZ_CONTROL_COUNT		1
@@ -162,6 +163,8 @@ typedef char boolean;
 #define GAME_PLAY		0x01	// normal game play with motor motion	
 #define GAME_SIMULATE	0x22	// simulated play, no motors, already at start
 #define GAME_AT_START	0x20	// assume rocket already at start position
+
+#define DEFAULT_SPEED   0x00	// use default motor speed
 
 // Exported Structures and Funtions
 
