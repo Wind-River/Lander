@@ -25,6 +25,11 @@
 #define STATE_FROM_CALLBACK  0x0040		// For usage validation, mark this state directly used by a callback 
 #define STATE_NOT_FOUND      0x0999
 
+#define ACTION_NOP NULL	// no callback action
+#define STATE_NOP  NULL // no next state
+
+#define LCD_BUFFER_1  1 // top line of LCD
+#define LCD_BUFFER_2  2 // bottom line of LCD
 
 struct StateGuiRec {
 	char*		state_name;	// String name of state
