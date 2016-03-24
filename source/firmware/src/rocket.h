@@ -207,6 +207,8 @@ extern struct ROCKET_CONTROL_S r_control;
 extern bool verbose;
 extern bool self_test;
 
+#define DEBUG_VERBOSE_MOVE false
+
 extern struct device *i2c;
 
 extern void log(char *message);
