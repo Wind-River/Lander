@@ -1,4 +1,4 @@
-/* rocket_measure.h - Rocket Lander Game */
+/* rocket_math.h - Rocket Lander Game */
 
 /* <legal-notice>
  *
@@ -39,7 +39,7 @@ struct ROCKET_FLIGHT_S {
 	int32_t	dy;
 	int32_t	dz;
 
-	int32_t	ax;			// change in angle around X,Y,Z per frame, degrees
+	int32_t	ax;		// change in angle around X,Y,Z per frame, degrees
 	int32_t	ay;
 	int32_t	az;
 
@@ -74,11 +74,12 @@ int32_t sqrt_rocket(int32_t x);
 
 int32_t micrometers2steps(int32_t tower,int32_t value);
 int32_t steps2micrometers(int32_t tower,int32_t value);
-int32_t n2m(int32_t value);
+int32_t micro2millimeter(int32_t value);
+int32_t milli2micrometer(int32_t value);
 
 extern struct ROCKET_FLIGHT_S r_flight;
 
-void compass_adjustment(uint8_t command, struct CompassRec *compass);
+void compass_select(uint8_t command, struct CompassRec *compass);
 void compute_tower_step_to_nm();
 
 double degrees2sine(int16_t degrees);
