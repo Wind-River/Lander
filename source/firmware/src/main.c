@@ -398,11 +398,11 @@ void init_game () {
 
 	if        (r_game.start_option == GAME_START_RANDOM) {
 		// TODO ###################
-		init_x=0;
-		init_y=0;
+		init_x=ROCKET_HOME_X;
+		init_y=ROCKET_HOME_Y;
 	} else {
-		init_x=0;
-		init_y=0;
+		init_x=ROCKET_HOME_X;
+		init_y=ROCKET_HOME_Y;
 	}
 
 	// init the rocket
@@ -411,11 +411,11 @@ void init_game () {
 	} else if (r_game.game == GAME_XYZ_LAND) {
 		init_rocket_game(init_x, init_y, GAME_Z_POS_MAX, r_game.fuel_option, r_game.gravity_option,GAME_PLAY);
 	} else if (r_game.game == GAME_XYZ_FLIGHT) {
-		init_rocket_game(init_x, init_y, 0, r_game.fuel_option, r_game.gravity_option,GAME_PLAY);
+		init_rocket_game(init_x, init_y, ROCKET_HOME_Z, r_game.fuel_option, r_game.gravity_option,GAME_PLAY);
 	} else if (r_game.game == GAME_XYZ_AUTO) {
 		init_rocket_game(init_x, init_y, GAME_Z_POS_MAX, r_game.fuel_option, r_game.gravity_option,GAME_PLAY);
 	} else if (r_game.game == GAME_XYZ_MOVE) {
-		init_rocket_game(init_x, init_y, 0 /* GAME_Z_POS_MAX/2 */, r_game.fuel_option, r_game.gravity_option,GAME_PLAY);
+		init_rocket_game(init_x, init_y, ROCKET_HOME_Z /* GAME_Z_POS_MAX/2 */, r_game.fuel_option, r_game.gravity_option,GAME_PLAY);
 	} else {
 		init_rocket_game(init_x, init_y, GAME_Z_POS_MAX, r_game.fuel_option, r_game.gravity_option,GAME_PLAY);
 	}
@@ -495,7 +495,7 @@ void init_main() {
 	
 			// display time ave every 64 * 1/5 second ~= 13 seconds
 			if (0x0000 == (time_cnt & 0x003f)) {
-				PRINT("*** Main_Time(%ld) = %ld:%ld / %ld, %ld < %ld < %ld\n",time_cnt,time_sum/time_cnt,time_cycle_sum/time_cycle_cnt,sys_clock_ticks_per_sec,time_max3,time_max2,time_max1);
+				//PRINT("*** Main_Time(%ld) = %ld:%ld / %ld, %ld < %ld < %ld\n",time_cnt,time_sum/time_cnt,time_cycle_sum/time_cycle_cnt,sys_clock_ticks_per_sec,time_max3,time_max2,time_max1);
 			}
 		}
 	}
@@ -562,8 +562,6 @@ void main() {
 	   	} else if (SLEEPTICKS <= (time_stop - time_start)) {
 	        /* no sleep for the busy */
 	   	} else {
-	   		uint32_t a=SLEEPTICKS;
-	   		uint32_t b=time_stop - time_start;
 	   		/* sleep the balance, rounding down one tick */
 	        task_sleep(SLEEPTICKS - (time_stop - time_start) - 1);
         }
