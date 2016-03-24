@@ -117,7 +117,7 @@ MicroAve ave_latency;
 
 /* Debugging */
 #define VERBOSE_MAX 3
-uint8_t verbose = 1;  // verbose level: 0=off, 1=ping, 2=moves, 3=I2C
+uint8_t verbose = 1;  // verbose level: 0=off, 1=errors,ping, 2=moves, 3=I2C
 #define PING_LOOP_COUNT 10000000L // display ping every 10 seconds
 #define PING_LOOP_INIT   2000000L // display first ping at 2 seconds
 
@@ -165,7 +165,7 @@ class Motor {
     Motor(const char * name, uint16_t pin_a,uint16_t pin_b);
 
     // member functions
-    void step_loop(int32_t u_sec_passed);
+    void step_loop(uint32_t u_sec_passed);
     void displayStatus();
     void reset();
 
@@ -178,17 +178,22 @@ class Motor {
     static boolean moveRequestPending();
     static void move_next(int16_t request_inc_nw,int16_t request_inc_ne,int16_t request_inc_sw,int16_t request_inc_se,int32_t request_speed);
     static void set_next(int16_t request_set_nw,int16_t request_set_ne,int16_t request_set_sw,int16_t request_set_se,int32_t request_speed);
-    static void motor_dispatcher(Motor *motor_nw,Motor *motor_ne,Motor *motor_sw,Motor *motor_se);
+    static boolean motor_dispatcher(Motor *motor_nw,Motor *motor_ne,Motor *motor_sw,Motor *motor_se);
 
     // member variables
     const char * name;        // name of this motor's tower
-    uint8_t pin_a;            // notor control A
-    uint8_t pin_b;            // notor control B
+    uint8_t pin_a;            // motor control A
+    uint8_t pin_b;            // motor control B
     int16_t step_location;    // current location of stepper motor, in steps
     int16_t step_destination; // goal location of stepper motor, in steps
-    int32_t microseconds_step_count; // speed loop current useconds countdown
-    int32_t microseconds_per_step;   // speed loop total count, in countdown useconds
+    uint32_t microseconds_step_count; // speed loop current useconds countdown
+    uint32_t microseconds_per_step;   // speed loop total count, in countdown useconds
 
+  /* error testing analytics */
+    uint32_t time_step_last;    // number of microseconds since last step
+    uint32_t time_step_loops;   // number of time loops since last step
+    uint16_t time_step_errors;  // number of under-time step errors
+    
     // static member variables
     static uint8_t power_pwm;   // power value 100=full on, 0=full off
     static uint8_t power_pin;   // pin for power control
@@ -209,9 +214,9 @@ class Motor {
     static int16_t request_location_sw;
     static int16_t request_location_se;
 
-    static int32_t req_microseconds_per_step; // pending speed, in countdown useconds
+    static uint32_t req_microseconds_per_step; // pending speed, in countdown useconds
 
-    static Motor *motor_critical_path;        // which motor is the timing critical path
+    static Motor *motor_critical_path;         // which motor is the timing critical path
 
   private:
 };
@@ -234,7 +239,7 @@ int16_t Motor::request_location_nw;
 int16_t Motor::request_location_ne;
 int16_t Motor::request_location_sw;
 int16_t Motor::request_location_se;
-int32_t Motor::req_microseconds_per_step;
+uint32_t Motor::req_microseconds_per_step;
 Motor*  Motor::motor_critical_path=NULL;
 
 
@@ -260,15 +265,18 @@ Motor::Motor(const char * name, uint16_t pin_a,uint16_t pin_b) {
 void Motor::reset() {
   step_location = 0L;
   step_destination = 0L;
-  microseconds_step_count = 0;
-  microseconds_per_step = 0;
+  microseconds_step_count = 0L;
+  microseconds_per_step = 0L;
   request_go = false;
   request_stop = false;
   request_increment = false;
   request_preset = false;
   request_destination = false;
-  req_microseconds_per_step = 0;
+  req_microseconds_per_step = 0L;
   enable_motion=true;
+  time_step_last=0L;
+  time_step_errors=0; 
+  time_step_loops=0;
   Motor::set_power(MOTOR_POWER_OFF);
 }
 
@@ -307,7 +315,7 @@ void Motor::move_next(int16_t request_inc_nw,int16_t request_inc_ne,int16_t requ
   request_increment_ne = request_inc_ne;
   request_increment_sw = request_inc_sw;
   request_increment_se = request_inc_se;
-  req_microseconds_per_step = request_speed;
+  req_microseconds_per_step = (uint32_t) request_speed;
   request_increment = true;
 
   if (verbose > 1) {
@@ -325,6 +333,7 @@ void Motor::move_next(int16_t request_inc_nw,int16_t request_inc_ne,int16_t requ
     else
       Serial.println(request_speed);
   }
+
 }
 
 void Motor::set_next(int16_t request_set_nw,int16_t request_set_ne,int16_t request_set_sw,int16_t request_set_se,int32_t request_speed) {
@@ -354,10 +363,12 @@ void Motor::set_next(int16_t request_set_nw,int16_t request_set_ne,int16_t reque
 }
 
 // Synchronously process pending motor commands here
-void Motor::motor_dispatcher(Motor *motor_nw,Motor *motor_ne,Motor *motor_sw,Motor *motor_se) {
-  int32_t move_time,longest_move;
-  int32_t microseconds_per_step;
-  int16_t diff_nw,diff_ne,diff_sw,diff_se;
+boolean Motor::motor_dispatcher(Motor *motor_nw,Motor *motor_ne,Motor *motor_sw,Motor *motor_se) {
+  uint32_t move_time,longest_move;
+  uint32_t microseconds_per_step;
+  uint32_t diff_nw,diff_ne,diff_sw,diff_se;
+  boolean request_change=false;
+  boolean request_clear=false;
   boolean request_move=false;
 
   if (request_stop) {
@@ -369,14 +380,16 @@ void Motor::motor_dispatcher(Motor *motor_nw,Motor *motor_ne,Motor *motor_sw,Mot
     motor_sw->step_destination = motor_sw->step_location;
     motor_se->step_destination = motor_se->step_location;
     movement_display_counter = MOVEMENT_DISPLAY_COUNT;
-    return;
+    request_change = true;
+    request_clear = true;
   }
 
   if (request_go) {
     request_go = false;
     enable_motion = true;
     movement_display_counter = MOVEMENT_DISPLAY_COUNT;
-    return;
+    request_change = true;
+    request_clear = true;
   }
 
   if (request_preset) {
@@ -390,7 +403,8 @@ void Motor::motor_dispatcher(Motor *motor_nw,Motor *motor_ne,Motor *motor_sw,Mot
     motor_se->step_location    = request_location_se;
     motor_se->step_destination = motor_se->step_location;
     movement_display_counter = MOVEMENT_DISPLAY_COUNT;
-    return;
+    request_change = true;
+    request_clear = true;
   }
 
   if (request_destination) {
@@ -399,6 +413,8 @@ void Motor::motor_dispatcher(Motor *motor_nw,Motor *motor_ne,Motor *motor_sw,Mot
     motor_ne->step_destination = request_location_ne;
     motor_sw->step_destination = request_location_sw;
     motor_se->step_destination = request_location_se;
+    request_change = true;
+    request_clear = true;
     request_move = true;
   }
 
@@ -408,12 +424,22 @@ void Motor::motor_dispatcher(Motor *motor_nw,Motor *motor_ne,Motor *motor_sw,Mot
     motor_ne->step_destination += request_increment_ne;
     motor_sw->step_destination += request_increment_sw;
     motor_se->step_destination += request_increment_se;
+    request_change = true;
+    request_clear = true;
     request_move = true;
+  }
+
+   if (request_clear) {
+   /* reset countdown counters for any request */
+    motor_nw->microseconds_step_count = 0L;
+    motor_ne->microseconds_step_count = 0L;
+    motor_sw->microseconds_step_count = 0L;
+    motor_se->microseconds_step_count = 0L;
   }
 
   /* if not pending move request we are done here */
   if (!request_move) {
-    return;
+    return(request_change);
   }
 
   /*
@@ -434,32 +460,32 @@ void Motor::motor_dispatcher(Motor *motor_nw,Motor *motor_ne,Motor *motor_sw,Mot
   }
 
   /* compute the longest move and critical path */
-  diff_nw = motor_nw->step_destination - motor_nw->step_location;
-  diff_ne = motor_ne->step_destination - motor_ne->step_location;
-  diff_sw = motor_sw->step_destination - motor_sw->step_location;
-  diff_se = motor_se->step_destination - motor_se->step_location;
-  longest_move = abs(diff_nw);
+  diff_nw = (uint32_t) abs(motor_nw->step_destination - motor_nw->step_location);
+  diff_ne = (uint32_t) abs(motor_ne->step_destination - motor_ne->step_location);
+  diff_sw = (uint32_t) abs(motor_sw->step_destination - motor_sw->step_location);
+  diff_se = (uint32_t) abs(motor_se->step_destination - motor_se->step_location);
+  longest_move = diff_nw;
   Motor::motor_critical_path = motor_nw;
-  if (longest_move < abs(diff_ne)) {
-    longest_move = abs(diff_ne);
+  if (longest_move < diff_ne) {
+    longest_move = diff_ne;
     Motor::motor_critical_path = motor_ne;
   }
-  if (longest_move < abs(diff_sw)) {
-    longest_move = abs(diff_sw);
+  if (longest_move < diff_sw) {
+    longest_move = diff_sw;
     Motor::motor_critical_path = motor_sw;
   }
-  if (longest_move < abs(diff_se)) {
-    longest_move = abs(diff_se);
+  if (longest_move < diff_se) {
+    longest_move = diff_se;
     Motor::motor_critical_path = motor_se;
   }
 
   /* if there is no actual movement, we are done (avoid division by zero) */
-  if (0 == longest_move) return;
+  if (0 == longest_move) return(request_change);
 
   /* compute time for longest move */
   microseconds_per_step = req_microseconds_per_step;
   if (microseconds_per_step == MOTOR_SPEED_AUTO) {
-    microseconds_per_step = USECONDS_PER_FRAME/((int32_t) longest_move);
+    microseconds_per_step = USECONDS_PER_FRAME/longest_move;
   }
 
   /* enforce the speed limit */
@@ -467,13 +493,13 @@ void Motor::motor_dispatcher(Motor *motor_nw,Motor *motor_ne,Motor *motor_sw,Mot
     microseconds_per_step = MOTOR_SPEED_MAX;
 
   /* compute countdown time for each motor */
-  move_time = microseconds_per_step * ((int32_t) longest_move);
-  motor_nw->microseconds_per_step = move_time / abs((int32_t) diff_nw);
-  motor_ne->microseconds_per_step = move_time / abs((int32_t) diff_ne);
-  motor_sw->microseconds_per_step = move_time / abs((int32_t) diff_sw);
-  motor_se->microseconds_per_step = move_time / abs((int32_t) diff_se);
+  move_time = microseconds_per_step * longest_move;
+  motor_nw->microseconds_per_step = move_time / diff_nw;
+  motor_ne->microseconds_per_step = move_time / diff_ne;
+  motor_sw->microseconds_per_step = move_time / diff_sw;
+  motor_se->microseconds_per_step = move_time / diff_se;
 
-  if (verbose > 0) {
+  if (verbose > 1) {
     Serial.print("MOVE:(");
     Serial.print(diff_nw);
     Serial.print(",");
@@ -493,22 +519,20 @@ void Motor::motor_dispatcher(Motor *motor_nw,Motor *motor_ne,Motor *motor_sw,Mot
     Serial.println(")");
   }
 
-  /* reset countdown counters */
-  motor_nw->microseconds_step_count = 0L;
-  motor_ne->microseconds_step_count = 0L;
-  motor_sw->microseconds_step_count = 0L;
-  motor_se->microseconds_step_count = 0L;
-
   // set the motors to full power
   Motor::set_power(MOTOR_POWER_ON);
   movement_display_counter = MOVEMENT_DISPLAY_COUNT;
+
+  return(request_change);
 }
 
 // Synchronously advance the motor positions here
-void Motor::step_loop(int32_t u_sec_passed) {
-
+void Motor::step_loop(uint32_t u_sec_passed) {
+  uint32_t time_step_now;
+  
   // has enough time passed for a step?
   microseconds_step_count += u_sec_passed;
+  time_step_loops++;
   if ((enable_motion                                   ) &&
       (step_location           != step_destination     ) &&
       (microseconds_step_count >= microseconds_per_step) ) {
@@ -518,9 +542,52 @@ void Motor::step_loop(int32_t u_sec_passed) {
       ave_latency.addValue(microseconds_step_count - microseconds_per_step);
     }
 
-    // microseconds_step_count = microseconds_step_count - microseconds_per_step;
+    // undertime protection code
+    time_step_now = micros();
+    if (time_step_last) {
+      if ((verbose > 0) && (time_step_now == time_step_last)) {
+        // NOTE: verbose console sends will overlap with stepper counting, causing loop
+        // delays, so there will be some loops that reach their countdown in one
+        // pass, and in this test it can appear that no time passed, especially with
+        // the >=4 uSec reolution. This is normal and is not an error.
+      } else if (MOTOR_SPEED_MAX > (time_step_now - time_step_last)) {
+        /* not enough time - wait again */
+        time_step_errors++;
+        time_step_last = time_step_now;
+
+        if (verbose > 0) {
+          Serial.println("");
+          Serial.print("###ERROR_TIMING:[");
+          Serial.print(name);
+          Serial.print("]loc=");
+          Serial.print(step_location);
+          Serial.print(",dest=");
+          Serial.print(step_destination);
+          Serial.print(",last=");
+          Serial.print(time_step_last);
+          Serial.print(",now=");
+          Serial.print(time_step_now);
+          Serial.print(",inc=");
+          Serial.print(u_sec_passed);
+          Serial.print(",count=");
+          Serial.print(microseconds_step_count);
+          Serial.print(",max=");
+          Serial.print(microseconds_per_step);
+          Serial.print(",loops=");
+          Serial.print(time_step_loops);
+          Serial.println("");     
+        }
+
+        return;
+      }
+    }
+    time_step_last = time_step_now;
+    time_step_loops=0L;
+
+    // reset the step count to 0 to insure full time for next step
     microseconds_step_count = 0L;
 
+    /* what direction */
     if (step_location < step_destination)
       step_location++;
     else
@@ -564,7 +631,12 @@ void Motor::displayStatus() {
   Serial.print(step_destination);
   Serial.print(" steps, speed:");
   Serial.print(microseconds_per_step);
-  Serial.println(" mSec");
+  Serial.print(" mSec");
+  if (time_step_errors) {
+    Serial.print(" mSec, ERROR_TIMING=");
+    Serial.print(time_step_errors);
+  }
+  Serial.println("");
 }
 
 //
@@ -636,27 +708,30 @@ void show_help() {
 
 int32_t loop_count=PING_LOOP_INIT;
 int32_t ping_count=0;
-int32_t usec_last=0;
+uint32_t usec_last=0;
 
 void loop() {
-  int32_t usec_now;
-  int32_t usec_diff;
+  uint32_t usec_now;
+  uint32_t usec_diff;
   uint8_t verbose_orig = verbose;
   boolean quick_display = false;
 
   if (ENABLE_TIMING) ave_loop.setStop();
 
-  // Handle any pending move change requests
-  Motor::motor_dispatcher(&motor_nw,&motor_ne,&motor_sw,&motor_se);
-
-  // carefully extend uint_16 micro count to common base int_32 for time
+  // get the current time
   usec_now = micros();
-  if (usec_now < usec_last) {
-    // 32-bit roll over
-    usec_diff = (0xffffffff - usec_last) + 1 + usec_now;
-  } else {
-    usec_diff = usec_now - usec_last;
+
+  // Handle any pending move change requests
+  if (Motor::motor_dispatcher(&motor_nw,&motor_ne,&motor_sw,&motor_se)) {
+    /* there was a change, restart timer and wait this turn out */
+    usec_last = usec_now;
+    return;
+  } else if (usec_now < usec_last) {
+    /* there was a roll over, restart timer and wait this turn out */
+    usec_last = usec_now;
+    return;
   }
+  usec_diff = usec_now - usec_last;
   usec_last = usec_now;
 
   // advance the individual motor states
@@ -677,6 +752,8 @@ void loop() {
     }
 
     if ('H' == char_in) {
+      Serial.println("");
+      Serial.println("=== HISTOGRAMS ============");
       display_debug_histograms();
     }
     
@@ -860,7 +937,7 @@ void loop() {
 
   // update every 10 seconds
   if (0 < verbose) {
-    loop_count -= usec_diff;
+    loop_count -= (int32_t) usec_diff;
     if (0L >= loop_count) {
       loop_count=PING_LOOP_COUNT;
       if (1L == ping_count) show_help();
@@ -872,13 +949,14 @@ void loop() {
 
   // show status of recent activity
   if (movement_display_counter) {
-    movement_display_counter -= usec_diff;
+    movement_display_counter -= (int32_t) usec_diff;
     if (0L >= movement_display_counter) {
-
+      movement_display_counter=0L;
+      
       // set the motors to low power
       Motor::set_power(MOTOR_POWER_OFF /* MOTOR_POWER_LOW */);
 
-      if (0 < verbose) {
+      if (verbose > 0) {
         // show steps
         Serial.print("\n== Current: NW=");
         Serial.print(motor_nw.step_location);
@@ -888,16 +966,18 @@ void loop() {
         Serial.print(motor_sw.step_location);
         Serial.print(", SE=");
         Serial.println(motor_se.step_location);
-        // show millimeters
-        Serial.print("         mm:NW=");
+        // show approximate millimeters
+        Serial.print("        ~mm:NW=");
         Serial.print((motor_nw.step_location * ROCKET_TOWER_STEPS_PER_UM10)/UM10_PER_MILLIMETER);
         Serial.print(", NE=");
         Serial.print((motor_ne.step_location * ROCKET_TOWER_STEPS_PER_UM10)/UM10_PER_MILLIMETER);
         Serial.print(", SW=");
         Serial.print((motor_sw.step_location * ROCKET_TOWER_STEPS_PER_UM10)/UM10_PER_MILLIMETER);
         Serial.print(", SE=");
-        Serial.println((motor_se.step_location * ROCKET_TOWER_STEPS_PER_UM10)/UM10_PER_MILLIMETER);
-        movement_display_counter = 0L;
+        Serial.print((motor_se.step_location * ROCKET_TOWER_STEPS_PER_UM10)/UM10_PER_MILLIMETER);
+    Serial.print(", diff=");
+    Serial.println(usec_diff);
+        
       }
     }
   }
@@ -1103,7 +1183,7 @@ void requestEvent() {
       time_remain = 0L;
     } else {
       time_remain = abs(Motor::motor_critical_path->step_destination - Motor::motor_critical_path->step_location);
-      time_remain *= Motor::motor_critical_path->microseconds_step_count;
+      time_remain *= (int32_t) Motor::motor_critical_path->microseconds_step_count;
       time_remain /= 1000L; /* convert to milliseconds */
       if (time_remain > 32000) time_remain = 32000; /* keep it to 16-bits */
     }
@@ -1122,4 +1202,3 @@ void requestEvent() {
   }
 
 }
-
