@@ -29,7 +29,7 @@
  *    - Links the callbacks for (a) state entry, (b) state loop, (c) state exit
  *  - The sanity test validates the content of the state table
  */
- 
+
 #include <zephyr.h>
 
 #include <i2c.h>
@@ -107,7 +107,35 @@ void set_lcd_display(int32_t line,char *buffer) {
 static void display_state() {
 
 	sprintf(r_control.lcd_line0,"%-16s",state_array[state_now].display_1);
-	sprintf(r_control.lcd_line1,"%-16s",state_array[state_now].display_2);
+	if (STATE_REVERSE_MENUS && (0x0000 == (state_array[state_now].state_flags & STATE_NO_MENU_TEXT))) {
+		// flip the menu labels,
+		// Case 1: two strings separated by spaces (normal)
+		// Case 2: one string on left
+		// Case 3: one string on right
+		// Case 4: one long string
+		// Case 5: no strings, just spaces (e.g. pass through states)
+		uint8_t first_space=0,last_space=15,i;
+
+		for (i=0;i<16;i++) buffer[i]=' ';
+		sprintf(&buffer[16],"%-16s",state_array[state_now].display_2);
+
+		while ((' ' != buffer[16+first_space]) && (first_space<16)) first_space++;
+		while ((' ' != buffer[16+last_space ]) && (last_space > 0)) last_space--;
+
+		if (first_space > 0)
+			strncpy(&buffer[16-first_space],&buffer[16],first_space);
+
+		if ((last_space < 15) && (last_space >= first_space))
+			strncpy(buffer,&buffer[16+last_space+1],15-last_space);
+
+		if (first_space < last_space)
+			strncpy(&buffer[15-last_space],&buffer[16+first_space],last_space-first_space+1);
+
+		buffer[16]='\0';
+		strcpy(r_control.lcd_line1,buffer);
+	} else {
+		sprintf(r_control.lcd_line1,"%-16s",state_array[state_now].display_2);
+	}
 
 	if (verbose && (0x0000 == (state_array[state_now].state_flags & STATE_NO_VERBOSE))) {
 		log("\n");
@@ -207,12 +235,6 @@ void next_state(char *select_state_name) {
  */
 
 
-static void S_Start_At_Home_enter () {
-	init_rocket_game(ROCKET_HOME_X, ROCKET_HOME_Y, ROCKET_HOME_Z, GAME_FUEL_NOLIMIT, GAME_GRAVITY_NONE,GAME_PLAY|GAME_AT_START);
-	jump_state("S_Main_Menu");
-}
-
-
 /**** CALIBRATE HOME ********************************************************/
 
 static struct CompassRec calibrate_compass;
@@ -232,21 +254,25 @@ static void display_motor_status (char *msg) {
 }
 
 static void S_Calibrate_Init_enter () {
+	// tell the motors to pretend that they are home position
+	r_space.rocket_goal_x = ROCKET_CALIBRATE_X;
+	r_space.rocket_goal_y = ROCKET_CALIBRATE_Y;
+	r_space.rocket_goal_z = ROCKET_CALIBRATE_Z;
+	compute_rocket_cable_lengths();
+	set_rocket_position();
+
 	// put the rocket motors into calibrate mode (disable N/A position limits)
 	rocket_command_send(ROCKET_MOTOR_CMD_CALIBRATE);
 
-	// tell the motors to pretend that they are game start position, to avoid step limits 
-	init_rocket_game(0, 0, 0, GAME_FUEL_NOLIMIT, GAME_GRAVITY_NONE,GAME_AT_START);
-	
 	// init the calibration compass
-	compass_adjustment(COMPASS_INIT,&calibrate_compass);
+	compass_select(COMPASS_INIT,&calibrate_compass);
 
 	goto_state("S_Calibrate_Home");
 }
 
 static void S_CalibrateHome_loop () {
 	// measure against the calibration compass
-	compass_adjustment(COMPASS_CALC_HOME,&calibrate_compass);
+	compass_select(COMPASS_CALC_HOME,&calibrate_compass);
 	strncpy(&state_array[state_now].display_2[5],calibrate_compass.name,2);
 	display_state();
 
@@ -255,24 +281,23 @@ static void S_CalibrateHome_loop () {
 }
 
 static void S_CalibrateHome_Done_enter () {
-	// Set the towers to the calibrated position
+	// Tell the rocket motors that they are now at the calibrated home position
 	r_space.rocket_goal_x = ROCKET_CALIBRATE_X;
 	r_space.rocket_goal_y = ROCKET_CALIBRATE_Y;
 	r_space.rocket_goal_z = ROCKET_CALIBRATE_Z;
 	compute_rocket_cable_lengths();
 
-	// Tell the rocket motors where they are now
-	rocket_position_send();
-	rocket_command_send(ROCKET_MOTOR_CMD_PRESET);
+	//
+	set_rocket_position();
 	// And go back to normal mode
 	rocket_command_send(ROCKET_MOTOR_CMD_NORMAL);
 
-	PRINT("At Home: (%6ld,%6ld,%6ld) NW=(%6ld,%6ld),NE=(%6ld,%6ld),SW=(%6ld,%6ld),SE=(%6ld,%6ld)\n",
-		n2m(r_space.rocket_goal_x),n2m(r_space.rocket_goal_y),n2m(r_space.rocket_goal_z),
-		n2m(r_towers[ROCKET_TOWER_NW].length), r_towers[ROCKET_TOWER_NW].step_count,
-		n2m(r_towers[ROCKET_TOWER_NE].length), r_towers[ROCKET_TOWER_NE].step_count,
-		n2m(r_towers[ROCKET_TOWER_SW].length), r_towers[ROCKET_TOWER_SW].step_count,
-		n2m(r_towers[ROCKET_TOWER_SE].length), r_towers[ROCKET_TOWER_SE].step_count
+	if (DEBUG_VERBOSE_MOVE) PRINT("At Home: (%6ld,%6ld,%6ld) NW=(%6ld,%6ld),NE=(%6ld,%6ld),SW=(%6ld,%6ld),SE=(%6ld,%6ld)\n",
+		micro2millimeter(r_space.rocket_goal_x),micro2millimeter(r_space.rocket_goal_y),micro2millimeter(r_space.rocket_goal_z),
+		micro2millimeter(r_towers[ROCKET_TOWER_NW].length), r_towers[ROCKET_TOWER_NW].step_count,
+		micro2millimeter(r_towers[ROCKET_TOWER_NE].length), r_towers[ROCKET_TOWER_NE].step_count,
+		micro2millimeter(r_towers[ROCKET_TOWER_SW].length), r_towers[ROCKET_TOWER_SW].step_count,
+		micro2millimeter(r_towers[ROCKET_TOWER_SE].length), r_towers[ROCKET_TOWER_SE].step_count
 		);
 
 	// next calibrate spindles scale
@@ -280,11 +305,11 @@ static void S_CalibrateHome_Done_enter () {
 }
 
 static void S_CalibrateHome_Lock_enter  () {
-	
+
 	// lock the current motor (unlock if currently locked)
-	compass_adjustment(COMPASS_LOCK,&calibrate_compass);
-	
-	// display current motor status  
+	compass_select(COMPASS_LOCK,&calibrate_compass);
+
+	// display current motor status
 	display_motor_status("Step Status");
 	jump_state("S_Calibrate_Home");
 }
@@ -293,12 +318,12 @@ static void S_CalibrateHome_Lock_enter  () {
 
 static void S_Calibrate_Position_Enter () {
 	// init the calibration compass
-	compass_adjustment(COMPASS_INIT,&calibrate_compass);
+	compass_select(COMPASS_INIT,&calibrate_compass);
 }
 
 static void S_Calibrate_Position_Loop () {
 	// measure against the calibration compass
-	compass_adjustment(COMPASS_CALC_POS,&calibrate_compass);
+	compass_select(COMPASS_CALC_POS,&calibrate_compass);
 	strncpy(&state_array[state_now].display_2[5],calibrate_compass.name,5);
 	display_state();
 }
@@ -306,8 +331,9 @@ static void S_Calibrate_Position_Loop () {
 static void S_Calibrate_Position_Go_enter () {
 	const char *name = calibrate_compass.name;
 
+	// ############# TODO DEBUG CODE
 	PRINT("MOVE_TO:%s at (%6ld,%6ld,%6ld)\n",
-		name,n2m(calibrate_compass.x),n2m(calibrate_compass.y),n2m(calibrate_compass.z));
+		name,micro2millimeter(calibrate_compass.x),micro2millimeter(calibrate_compass.y),micro2millimeter(calibrate_compass.z));
 
 	// fly the rocket to this position
 	flight_linear(calibrate_compass.x,calibrate_compass.y,calibrate_compass.z, MOTOR_SPEED_AUTO);
@@ -318,13 +344,14 @@ static void S_Calibrate_Position_Go_enter () {
 
 static void S_Flight_Linear_loop () {
 	if (r_flight.frame_count >= r_flight.frame_max) {
-		PRINT("Now at:(%6ld,%6ld,%6ld) NW=(%6ld,%6ld),NE=(%6ld,%6ld),SW=(%6ld,%6ld),SE=(%6ld,%6ld)\n",
-			n2m(r_space.rocket_x),n2m(r_space.rocket_y),n2m(r_space.rocket_z),
-			n2m(r_towers[ROCKET_TOWER_NW].length), r_towers[ROCKET_TOWER_NW].step_count,
-			n2m(r_towers[ROCKET_TOWER_NE].length), r_towers[ROCKET_TOWER_NE].step_count,
-			n2m(r_towers[ROCKET_TOWER_SW].length), r_towers[ROCKET_TOWER_SW].step_count,
-			n2m(r_towers[ROCKET_TOWER_SE].length), r_towers[ROCKET_TOWER_SE].step_count
+		if (DEBUG_VERBOSE_MOVE) PRINT("Now at:(%6ld,%6ld,%6ld) NW=(%6ld,%6ld),NE=(%6ld,%6ld),SW=(%6ld,%6ld),SE=(%6ld,%6ld)\n",
+			micro2millimeter(r_space.rocket_x),micro2millimeter(r_space.rocket_y),micro2millimeter(r_space.rocket_z),
+			micro2millimeter(r_towers[ROCKET_TOWER_NW].length), r_towers[ROCKET_TOWER_NW].step_count,
+			micro2millimeter(r_towers[ROCKET_TOWER_NE].length), r_towers[ROCKET_TOWER_NE].step_count,
+			micro2millimeter(r_towers[ROCKET_TOWER_SW].length), r_towers[ROCKET_TOWER_SW].step_count,
+			micro2millimeter(r_towers[ROCKET_TOWER_SE].length), r_towers[ROCKET_TOWER_SE].step_count
 			);
+		compute_rocket_cable_lengths_verbose();
 		goto_state((char *) r_flight.state_done);
 	} else {
 		flight_linear_loop();
@@ -337,19 +364,25 @@ static void S_Flight_Linear_loop () {
 /**** CALIBRATE CIRCLES ********************************************************/
 
 static int8_t circle_pass=0;
+static int8_t bumblebee_pass=0;
 
 static void S_Calibrate_Circle_Enter () {
 	// init the calibration compass
-	compass_adjustment(COMPASS_INIT,&calibrate_compass);
+	compass_select(COMPASS_INIT,&calibrate_compass);
 	circle_pass=0;
+	bumblebee_pass=0;
 }
 
 static void S_Calibrate_Circle_Loop () {
 	// measure against the calibration compass
-	compass_adjustment(COMPASS_CALC_POS,&calibrate_compass);
-	strncpy(&state_array[state_now].display_2[5],calibrate_compass.name,5);
+	compass_select(COMPASS_CALC_CIRC,&calibrate_compass);
+	strncpy(&state_array[state_now].display_2[7],calibrate_compass.name,strlen(calibrate_compass.name));
 	display_state();
 }
+
+// #define CIRCLE_TEST_DEGREES_SECOND 20
+#define CIRCLE_TEST_DEGREES_SECOND 40
+#define BUMBLEBEE_MAX 10
 
 static void S_Calibrate_Circle_Go_enter () {
 	const char *name = calibrate_compass.name;
@@ -359,46 +392,94 @@ static void S_Calibrate_Circle_Go_enter () {
 		PRINT("CIRCLE PRESET:%s\n",name);
 
 		// fly the rocket to the initial position
-		if         (0 == strcmp("Z",name)) {
-			flight_linear(20000L,0,20000L, MOTOR_SPEED_AUTO);
-		} else 	if (0 == strcmp("Y",name)) {
-			flight_linear(20000L,0,20000L, MOTOR_SPEED_AUTO);
-		} else 	if (0 == strcmp("X",name)) {
-			flight_linear(0,20000L,20000L, MOTOR_SPEED_AUTO);
-		} else 	if (0 == strcmp("A",name)) {
-			flight_linear(20000L,0,20000L, MOTOR_SPEED_AUTO);
+		if         ('Z' == name[0]) {
+			flight_linear(ROCKET_HOME_X+100000L,ROCKET_HOME_Y,ROCKET_HOME_Z+150000L, MOTOR_SPEED_AUTO);
+			r_flight.state_done="S_Calibrate_Circle_Go";
+		} else 	if ('Y' == name[0]) {
+			flight_linear(ROCKET_HOME_X+100000L,ROCKET_HOME_Y+0,ROCKET_HOME_Z+150000L, MOTOR_SPEED_AUTO);
+			r_flight.state_done="S_Calibrate_Circle_Go";
+		} else 	if ('X' == name[0]) {
+			flight_linear(ROCKET_HOME_X+0,ROCKET_HOME_Y+100000L,ROCKET_HOME_Z+150000L, MOTOR_SPEED_AUTO);
+			r_flight.state_done="S_Calibrate_Circle_Go";
+		} else 	if ('A' == name[0]) {
+			flight_linear(ROCKET_HOME_X+100000L,ROCKET_HOME_Y+0,ROCKET_HOME_Z+150000L, MOTOR_SPEED_AUTO);
+			r_flight.state_done="S_Calibrate_Circle_Go";
+		} else 	if ('H' == name[0]) {
+			flight_linear(ROCKET_HOME_X+0,ROCKET_HOME_Y+0,ROCKET_HOME_Z+0, MOTOR_SPEED_AUTO);
+			r_flight.state_done="S_Calibrate_Circle_Select";
+		} else 	if ('B' == name[0]) {
+			flight_linear(ROCKET_HOME_X+0,ROCKET_HOME_Y+0,ROCKET_HOME_Z+150000L, MOTOR_SPEED_AUTO);
+			r_flight.state_done="S_Calibrate_BumbleBee_Go";
+		} else {
+			next_state("S_Calibrate_Circle_Select");
+			return;
 		}
-		r_flight.state_done="S_Calibrate_Circle_Go";
 		next_state("S_Flight_Linear");
 	} else if (1 == circle_pass) {
 		circle_pass++;
 		PRINT("CIRCLE GO:%s\n",name);
 
 		// fly the rocket in a circle
-		if         (0 == strcmp("Z",name)) {
-			flight_circular(0,0,20/FRAMES_PER_SECOND, 0, 0, 0, 360/(20/FRAMES_PER_SECOND));
-		} else 	if (0 == strcmp("Y",name)) {
-			flight_circular(0,40/FRAMES_PER_SECOND,0, 0, 0, 0, 360/(20/FRAMES_PER_SECOND));
-		} else 	if (0 == strcmp("X",name)) {
-			flight_circular(40/FRAMES_PER_SECOND,0,0, 0, 0, 0, 360/(20/FRAMES_PER_SECOND));
-		} else 	if (0 == strcmp("A",name)) {
-			flight_circular(5/FRAMES_PER_SECOND,10/FRAMES_PER_SECOND,20/FRAMES_PER_SECOND, 0, 0, 0, (2*360)/(20/FRAMES_PER_SECOND));
+		if         ('Z' == name[0]) {
+			flight_circular(0,0,CIRCLE_TEST_DEGREES_SECOND/FRAMES_PER_SECOND, ROCKET_HOME_X+0, ROCKET_HOME_Y+0, ROCKET_HOME_Z+150000L, 360/(CIRCLE_TEST_DEGREES_SECOND/FRAMES_PER_SECOND));
+		} else 	if ('Y' == name[0]) {
+			flight_circular(0,CIRCLE_TEST_DEGREES_SECOND*2/FRAMES_PER_SECOND,0, ROCKET_HOME_X+0, ROCKET_HOME_Y+0, ROCKET_HOME_Z+150000L, 360/(CIRCLE_TEST_DEGREES_SECOND/FRAMES_PER_SECOND));
+		} else 	if ('X' == name[0]) {
+			flight_circular(CIRCLE_TEST_DEGREES_SECOND/FRAMES_PER_SECOND,0,0, ROCKET_HOME_X+0,ROCKET_HOME_Y+0,ROCKET_HOME_Z+150000L, 360/(CIRCLE_TEST_DEGREES_SECOND/FRAMES_PER_SECOND));
+		} else 	if ('A' == name[0]) {
+			flight_circular((CIRCLE_TEST_DEGREES_SECOND/4)/FRAMES_PER_SECOND,
+			                (CIRCLE_TEST_DEGREES_SECOND/2)/FRAMES_PER_SECOND,
+			                CIRCLE_TEST_DEGREES_SECOND/FRAMES_PER_SECOND,
+			                ROCKET_HOME_X+0, ROCKET_HOME_Y+0, ROCKET_HOME_Z+150000L,
+			                (2*360)/(CIRCLE_TEST_DEGREES_SECOND/FRAMES_PER_SECOND));
+		} else {
+			next_state("S_Calibrate_Circle_Select");
+			return;
 		}
 		r_flight.state_done="S_Calibrate_Circle_Go";
 		next_state("S_Flight_Circle");
 	} else {
-		next_state("S_Calibrate_Position_Select");
+		next_state("S_Calibrate_Circle_Select");
+	}
+}
+
+void S_Calibrate_BumbleBee_Go_enter () {
+	int32_t randnum = task_cycle_get_32()/2L /*sys_rand32_get()*/;
+	int32_t x,y,z,a,b;
+
+	if (BUMBLEBEE_MAX <= bumblebee_pass) {
+		next_state("S_Calibrate_Circle_Select");
+	} else {
+		bumblebee_pass++;
+
+		// get a random centimeter for x,y,z within 100 millimeters from flight center
+		// xor the top and bottom words
+		x = ((randnum >> 16) & 0x0000ffffL);
+		y = ( randnum        & 0x0000ffffL);
+		a = x & y;
+	    b = ~x & ~y;
+        randnum = ~a & ~b;
+
+		x = ((randnum % 20L) - 10) * 10000L;
+		randnum /= 20L;
+		y = ((randnum % 20L) - 10) * 10000L;
+		randnum /= 20L;
+		z = ((randnum % 20L) - 10) * 10000L;
+
+		flight_linear(ROCKET_HOME_X+x,ROCKET_HOME_Y+y,ROCKET_HOME_Z+150000L+z, MOTOR_SPEED_AUTO);
+		r_flight.state_done="S_Calibrate_BumbleBee_Go";
+		next_state("S_Flight_Linear");
 	}
 }
 
 static void S_Flight_Circle_loop () {
 	if (r_flight.frame_count >= r_flight.frame_max) {
-		PRINT("Now at:(%6ld,%6ld,%6ld) NW=(%6ld,%6ld),NE=(%6ld,%6ld),SW=(%6ld,%6ld),SE=(%6ld,%6ld)\n",
-			n2m(r_space.rocket_x),n2m(r_space.rocket_y),n2m(r_space.rocket_z),
-			n2m(r_towers[ROCKET_TOWER_NW].length), r_towers[ROCKET_TOWER_NW].step_count,
-			n2m(r_towers[ROCKET_TOWER_NE].length), r_towers[ROCKET_TOWER_NE].step_count,
-			n2m(r_towers[ROCKET_TOWER_SW].length), r_towers[ROCKET_TOWER_SW].step_count,
-			n2m(r_towers[ROCKET_TOWER_SE].length), r_towers[ROCKET_TOWER_SE].step_count
+		if (DEBUG_VERBOSE_MOVE) PRINT("Now at:(%6ld,%6ld,%6ld) NW=(%6ld,%6ld),NE=(%6ld,%6ld),SW=(%6ld,%6ld),SE=(%6ld,%6ld)\n",
+			micro2millimeter(r_space.rocket_x),micro2millimeter(r_space.rocket_y),micro2millimeter(r_space.rocket_z),
+			micro2millimeter(r_towers[ROCKET_TOWER_NW].length), r_towers[ROCKET_TOWER_NW].step_count,
+			micro2millimeter(r_towers[ROCKET_TOWER_NE].length), r_towers[ROCKET_TOWER_NE].step_count,
+			micro2millimeter(r_towers[ROCKET_TOWER_SW].length), r_towers[ROCKET_TOWER_SW].step_count,
+			micro2millimeter(r_towers[ROCKET_TOWER_SE].length), r_towers[ROCKET_TOWER_SE].step_count
 			);
 		goto_state((char *) r_flight.state_done);
 	} else {
@@ -406,8 +487,20 @@ static void S_Flight_Circle_loop () {
 		sprintf(buffer,"Circle:  %2d/%02d",r_flight.frame_count,r_flight.frame_max);
 		set_lcd_display(LCD_BUFFER_2,buffer);
 		display_state();
+
+		if (DEBUG_VERBOSE_MOVE) PRINT("Now at:(%6ld,%6ld,%6ld)A(%6ld,%6ld,%6ld)Motors=(%6ld,%6ld,%6ld,%6ld)\n",
+			micro2millimeter(r_space.rocket_x),micro2millimeter(r_space.rocket_y),micro2millimeter(r_space.rocket_z),
+			r_flight.current_ax,
+			r_flight.current_ay,
+			r_flight.current_az,
+			r_towers[ROCKET_TOWER_NW].step_count,
+			r_towers[ROCKET_TOWER_NE].step_count,
+			r_towers[ROCKET_TOWER_SW].step_count,
+			r_towers[ROCKET_TOWER_SE].step_count
+			);
 	}
 }
+
 
 static void S_Flight_Wait_loop () {
 	if (r_flight.frame_count >= r_flight.frame_max) {
@@ -471,16 +564,12 @@ static void S_Game_Start_enter () {
 	send_Sound(SOUND_PLAY);
 	send_NeoPixel(NEOPIXEL_PLAY);
 	updateLedDisplays();
-}
 
-static void S_Game_Start_loop () {
-	uint8_t position_status = query_rocket_progress();
-	sprintf(state_array[state_now].display_1,"Progress=%4d",position_status);
-	display_state();
-	if (100 == position_status) {
-		// we are done moving
-		jump_state("S_Game_Play");
-	}
+	// fly the rocket to game start position
+	flight_linear(r_space.rocket_goal_x,r_space.rocket_goal_y,r_space.rocket_goal_z, MOTOR_SPEED_AUTO);
+	r_flight.state_done="S_Game_Play";
+	// go fly at next frame
+	next_state("S_Flight_Linear");
 }
 
 static void S_Game_Play_loop () {
@@ -725,7 +814,7 @@ static void S_Test_Simulation_Meters_enter () {
 	sprintf(buffer,"=== Rocket Controls to Position in game space ===\n");
 	// preset start location, and options
 	r_game.game=GAME_XYZ_MOVE;
-	init_rocket_game (0, 0, Z_POS_MAX/2, GAME_FUEL_NOLIMIT, GAME_GRAVITY_NONE,GAME_SIMULATE);
+	init_rocket_game (ROCKET_HOME_X, ROCKET_HOME_Y, Z_POS_MAX/2, GAME_FUEL_NOLIMIT, GAME_GRAVITY_NONE,GAME_SIMULATE);
 	title_loop=0;
 }
 
@@ -782,7 +871,7 @@ static void S_Test_Simulation_Cables_enter () {
 
 	// preset start location, and options
 	r_game.game=GAME_XYZ_MOVE;
-	init_rocket_game (0, 0, Z_POS_MAX/2, GAME_FUEL_NOLIMIT, GAME_GRAVITY_NONE,GAME_SIMULATE);
+	init_rocket_game (ROCKET_HOME_X, ROCKET_HOME_Y, Z_POS_MAX/2, GAME_FUEL_NOLIMIT, GAME_GRAVITY_NONE,GAME_SIMULATE);
 	title_loop=0;
 }
 
@@ -816,7 +905,7 @@ static void S_Test_Simulation_Steps_enter () {
 
 	// preset start location, and options
 	r_game.game=GAME_XYZ_MOVE;
-	init_rocket_game (0, 0, Z_POS_MAX/2, GAME_FUEL_NOLIMIT, GAME_GRAVITY_NONE,GAME_SIMULATE);
+	init_rocket_game (ROCKET_HOME_X, ROCKET_HOME_Y, Z_POS_MAX/2, GAME_FUEL_NOLIMIT, GAME_GRAVITY_NONE,GAME_SIMULATE);
 	title_loop=0;
 }
 
@@ -1010,13 +1099,17 @@ void cable_calc_test(char *msg, int32_t x, int32_t y) {
 		r_space.rocket_goal_y = y;
 		r_space.rocket_goal_z = i;
 		compute_rocket_cable_lengths();
-		PRINT("[%s] Cable(%4d,%4d,%4d)=%5d,%5d,%5d,%5d\n",
+		PRINT("[%s] Cable(%4d,%4d,%4d)=%5d,%5d,%5d,%5d/%5d,%5d,%5d,%5d\n",
 			msg,
 			x/1000,y/1000,i/1000,
 			r_towers[ROCKET_TOWER_NW].length_goal/1000,
 			r_towers[ROCKET_TOWER_NE].length_goal/1000,
 			r_towers[ROCKET_TOWER_SW].length_goal/1000,
-			r_towers[ROCKET_TOWER_SE].length_goal/1000
+			r_towers[ROCKET_TOWER_SE].length_goal/1000,
+			r_towers[ROCKET_TOWER_NW].step_goal,
+			r_towers[ROCKET_TOWER_NE].step_goal,
+			r_towers[ROCKET_TOWER_SW].step_goal,
+			r_towers[ROCKET_TOWER_SE].step_goal
 			);
 	}
 }
@@ -1031,6 +1124,29 @@ void cable_steps_start(int32_t x, int32_t y, int32_t z) {
 
 	compute_rocket_cable_lengths();
 	move_rocket_next_position();
+}
+
+void cable_step_pos(char* msg,int32_t x, int32_t y, int32_t z) {
+	r_space.rocket_x = x;
+	r_space.rocket_y = y;
+	r_space.rocket_z = z;
+	r_space.rocket_goal_x = x;
+	r_space.rocket_goal_y = y;
+	r_space.rocket_goal_z = z;
+
+	compute_rocket_cable_lengths();
+	move_rocket_next_position();
+	PRINT("Pos[%s](%4d,%4d,%4d)=>%5d,%5d,%5d,%5d/%5d,%5d,%5d,%5d\n",
+		msg,x/1000,y/1000,z/1000,
+		r_towers[ROCKET_TOWER_NW].length_goal/1000,
+		r_towers[ROCKET_TOWER_NE].length_goal/1000,
+		r_towers[ROCKET_TOWER_SW].length_goal/1000,
+		r_towers[ROCKET_TOWER_SE].length_goal/1000,
+		r_towers[ROCKET_TOWER_NW].step_goal,
+		r_towers[ROCKET_TOWER_NE].step_goal,
+		r_towers[ROCKET_TOWER_SW].step_goal,
+		r_towers[ROCKET_TOWER_SE].step_goal
+		);
 }
 
 void cable_steps_move(int32_t x, int32_t y, int32_t z) {
@@ -1053,20 +1169,38 @@ void cable_steps_move(int32_t x, int32_t y, int32_t z) {
 	move_rocket_next_position();
 }
 
+void rotation_test(int32_t ax, int32_t ay, int32_t az) {
+	r_flight.current_ax = ax; r_flight.current_ay = ay; r_flight.current_az = az;
+	flight_circular_loop();
+	PRINT("CIRCLE(%3d,%3d,%3d)=>(%8d,%8d,%8d) \n",
+		ax, ay, az,
+		r_space.rocket_goal_x,r_space.rocket_goal_y,r_space.rocket_goal_z);
+}
 
 /**** TEST STATE SANITY ********************************************************/
 
-static void S_Test_Sanity_enter () {
+static void S_Test_Sanity_Base_enter () {
+
+	self_test=true;
+
+	PRINT("At Home: (%6ld,%6ld,%6ld) NW=(%6ld,%6ld),NE=(%6ld,%6ld),SW=(%6ld,%6ld),SE=(%6ld,%6ld)\n",
+		micro2millimeter(r_space.rocket_goal_x),micro2millimeter(r_space.rocket_goal_y),micro2millimeter(r_space.rocket_goal_z),
+		micro2millimeter(r_towers[ROCKET_TOWER_NW].length), r_towers[ROCKET_TOWER_NW].step_count,
+		micro2millimeter(r_towers[ROCKET_TOWER_NE].length), r_towers[ROCKET_TOWER_NE].step_count,
+		micro2millimeter(r_towers[ROCKET_TOWER_SW].length), r_towers[ROCKET_TOWER_SW].step_count,
+		micro2millimeter(r_towers[ROCKET_TOWER_SE].length), r_towers[ROCKET_TOWER_SE].step_count
+		);
+
+	self_test=false;
+}
+
+
+static void S_Test_Sanity_State_enter () {
 	int32_t i,j;
 	bool state_is_called;
-	int32_t rocket_x_orig = r_space.rocket_x;
-	int32_t rocket_y_orig = r_space.rocket_y;
-	int32_t rocket_z_orig = r_space.rocket_z;
-	int32_t game_mode_orig = r_game.game_mode;
 
 	// set the state table self test flag
 	self_test=true;
-	r_game.game_mode = GAME_SIMULATE;
 
 	PRINT("\n=== Self Test: State table =%d of %d ===\n",StateGuiCount,StateGuiMax);
 
@@ -1110,8 +1244,25 @@ static void S_Test_Sanity_enter () {
 		}
 
 	}
-	PRINT("\n========================================\n\n");
 
+	// finally, reset game defaults
+	self_test=false;
+
+	// explicitly force the next state, because of the state tests above
+	next_state("S_Test_Sanity_Positions_Select");
+}
+
+static void S_Test_Sanity_Positions_enter () {
+	int32_t i;
+	int32_t rocket_x_orig = r_space.rocket_x;
+	int32_t rocket_y_orig = r_space.rocket_y;
+	int32_t rocket_z_orig = r_space.rocket_z;
+	int32_t game_mode_orig = r_game.game_mode;
+
+	// set the state table self test flag
+	self_test=true;
+
+	PRINT("\n========================================\n\n");
 	PRINT("Rocket(x,y,x)=(%ld,%ld,%ld) in uM\n",r_space.rocket_x,r_space.rocket_y,r_space.rocket_z);
 	PRINT("Tower  b        a        scaler\n");
 	PRINT("------ -------- -------- -------\n");
@@ -1120,8 +1271,42 @@ static void S_Test_Sanity_enter () {
 			r_towers[i].um2step_slope >> r_towers[i].um2step_scaler,
 			r_towers[i].um2step_offset,r_towers[i].um2step_scaler);
 	}
-	
 	PRINT("\n========================================\n\n");
+
+	PRINT("\n=== Step Calibration ===================\n\n");
+	cable_step_pos("HM+00",ROCKET_HOME_X        ,ROCKET_HOME_Y        ,ROCKET_HOME_Z);
+	cable_step_pos("NW+00",ROCKET_HOME_X-100000L,ROCKET_HOME_Y+100000L,ROCKET_HOME_Z);
+	cable_step_pos("NE+00",ROCKET_HOME_X+100000L,ROCKET_HOME_Y+100000L,ROCKET_HOME_Z);
+	cable_step_pos("SW+00",ROCKET_HOME_X-100000L,ROCKET_HOME_Y-100000L,ROCKET_HOME_Z);
+	cable_step_pos("SE+00",ROCKET_HOME_X+100000L,ROCKET_HOME_Y-100000L,ROCKET_HOME_Z);
+	cable_step_pos("HM+10",ROCKET_HOME_X        ,ROCKET_HOME_Y        ,ROCKET_HOME_Z+100000L);
+	cable_step_pos("NW+00",ROCKET_HOME_X-100000L,ROCKET_HOME_Y+100000L,ROCKET_HOME_Z+100000L);
+	cable_step_pos("NE+00",ROCKET_HOME_X+100000L,ROCKET_HOME_Y+100000L,ROCKET_HOME_Z+100000L);
+	cable_step_pos("SW+00",ROCKET_HOME_X-100000L,ROCKET_HOME_Y-100000L,ROCKET_HOME_Z+100000L);
+	cable_step_pos("SW+00",ROCKET_HOME_X+100000L,ROCKET_HOME_Y-100000L,ROCKET_HOME_Z+100000L);
+	PRINT("\n========================================\n\n");
+
+	// finally, reset game defaults
+	r_space.rocket_x = rocket_x_orig;
+	r_space.rocket_y = rocket_y_orig;
+	r_space.rocket_z = rocket_z_orig;
+	compute_rocket_cable_lengths();
+	move_rocket_next_position();
+	r_game.game_mode = game_mode_orig;
+
+	self_test=false;
+}
+
+static void S_Test_Sanity_Tables_enter () {
+	int32_t i,j;
+	int32_t rocket_x_orig = r_space.rocket_x;
+	int32_t rocket_y_orig = r_space.rocket_y;
+	int32_t rocket_z_orig = r_space.rocket_z;
+	int32_t game_mode_orig = r_game.game_mode;
+
+	// set the state table self test flag
+	self_test=true;
+	r_game.game_mode = GAME_SIMULATE;
 
 	PRINT("==== sqrt test @ (max cm) ===\n");
 	for (i=0,j=0;i<21325;i+=(21325/32),j++) {
@@ -1157,12 +1342,45 @@ static void S_Test_Sanity_enter () {
 	i=+10000;j=+40000; PRINT("tan(%2d,%2d)=%3d\n",i,j,atan2degrees((float) i,(float) j));
 	PRINT("\n========================================\n\n");
 
+	PRINT("==== Circular Rotation Calculation Test ===\n");
+	/* test x and y */
+	r_space.rocket_x=ROCKET_HOME_X+10000L;
+	r_space.rocket_y=ROCKET_HOME_Y;
+	r_space.rocket_z=ROCKET_HOME_Z;
+	flight_circular(0,0,0, ROCKET_HOME_X, ROCKET_HOME_Y, ROCKET_HOME_Z, 360/(20/FRAMES_PER_SECOND));
+	PRINT("RADIUS(%8d) \n",r_flight.radius);
+	rotation_test(0,0,0);
+	rotation_test(0,0,90);
+	rotation_test(0,0,45);
+	rotation_test(0,0,270);
+	rotation_test(0,45,0);
+	rotation_test(0,90,0);
+	rotation_test(0,270,0);
+	/* test x and z */
+	r_space.rocket_x=    0L;
+	r_space.rocket_y=10000L;
+	r_space.rocket_z=    0L;
+	flight_circular(0,0,0, ROCKET_HOME_X, ROCKET_HOME_Y, ROCKET_HOME_Z, 360/(20/FRAMES_PER_SECOND));
+	rotation_test(45,0,0);
+	rotation_test(90,0,0);
+	rotation_test(270,0,0);
+	PRINT("\n========================================\n\n");
+
+	PRINT("==== Position/Cable Length Calculation Test ===\n");
+	cable_calc_test("NW",r_towers[ROCKET_TOWER_NW].pos_x,r_towers[ROCKET_TOWER_NW].pos_y);
+	cable_calc_test("NE",r_towers[ROCKET_TOWER_NE].pos_x,r_towers[ROCKET_TOWER_NE].pos_y);
+	cable_calc_test("SW",r_towers[ROCKET_TOWER_SW].pos_x,r_towers[ROCKET_TOWER_SW].pos_y);
+	cable_calc_test("SE",r_towers[ROCKET_TOWER_SE].pos_x,r_towers[ROCKET_TOWER_SE].pos_y);
+	cable_calc_test("CN",0,0);
+
+
 	PRINT("==== Cable Length Calculation Test ===\n");
 	cable_calc_test("NW",r_towers[ROCKET_TOWER_NW].pos_x,r_towers[ROCKET_TOWER_NW].pos_y);
 	cable_calc_test("NE",r_towers[ROCKET_TOWER_NE].pos_x,r_towers[ROCKET_TOWER_NE].pos_y);
 	cable_calc_test("SW",r_towers[ROCKET_TOWER_SW].pos_x,r_towers[ROCKET_TOWER_SW].pos_y);
 	cable_calc_test("SE",r_towers[ROCKET_TOWER_SE].pos_x,r_towers[ROCKET_TOWER_SE].pos_y);
 	cable_calc_test("CN",0,0);
+
 
 	PRINT("\n==== Cable Steps Calculation Test ===\n");
 	PRINT("ROCKET_TOWER_NW:\n");
@@ -1204,8 +1422,9 @@ static void S_Test_Sanity_enter () {
 	r_space.rocket_x = rocket_x_orig;
 	r_space.rocket_y = rocket_y_orig;
 	r_space.rocket_z = rocket_z_orig;
-	self_test=false;
 	r_game.game_mode = game_mode_orig;
+	self_test=false;
+
 	goto_state("S_Main_Menu");
 }
 
@@ -1243,8 +1462,6 @@ void state_callback(char *call_name) {
 	} else if (0 == strcmp("S_Main_Menu_enter",call_name)) {
 		if (!self_test) S_Main_Menu_enter();
 
-	} else if (0 == strcmp("S_Start_At_Home_enter",call_name)) {
-		if (!self_test) S_Start_At_Home_enter();
 	} else if (0 == strcmp("S_Calibrate_Init_enter",call_name)) {
 		if (!self_test) S_Calibrate_Init_enter();
 	} else if (0 == strcmp("S_CalibrateHome_loop",call_name)) {
@@ -1265,6 +1482,8 @@ void state_callback(char *call_name) {
 		if (!self_test) S_Calibrate_Circle_Loop();
 	} else if (0 == strcmp("S_Calibrate_Circle_Go_enter",call_name)) {
 		if (!self_test) S_Calibrate_Circle_Go_enter();
+	} else if (0 == strcmp("S_Calibrate_BumbleBee_Go_enter",call_name)) {
+		if (!self_test) S_Calibrate_BumbleBee_Go_enter();
 
 	} else if (0 == strcmp("S_Flight_Linear_loop",call_name)) {
 		if (!self_test) S_Flight_Linear_loop();
@@ -1278,8 +1497,6 @@ void state_callback(char *call_name) {
 
 	} else if (0 == strcmp("S_Game_Start_enter",call_name)) {
 		if (!self_test) S_Game_Start_enter();
-	} else if (0 == strcmp("S_Game_Start_loop",call_name)) {
-		if (!self_test) S_Game_Start_loop();		
 	} else if (0 == strcmp("S_Game_Play_loop",call_name)) {
 		if (!self_test) S_Game_Play_loop();
 	} else if (0 == strcmp("S_Game_Done_enter",call_name)) {
@@ -1351,8 +1568,14 @@ void state_callback(char *call_name) {
 	} else if (0 == strcmp("do_Simulation_Resume_enter",call_name)) {
 		do_Simulation_Resume_enter();
 
-	} else if (0 == strcmp("S_Test_Sanity_enter",call_name)) {
-		if (!self_test) S_Test_Sanity_enter();
+	} else if (0 == strcmp("S_Test_Sanity_Base_enter",call_name)) {
+		if (!self_test) S_Test_Sanity_Base_enter();
+	} else if (0 == strcmp("S_Test_Sanity_State_enter",call_name)) {
+		if (!self_test) S_Test_Sanity_State_enter();
+	} else if (0 == strcmp("S_Test_Sanity_Positions_enter",call_name)) {
+		if (!self_test) S_Test_Sanity_Positions_enter();
+	} else if (0 == strcmp("S_Test_Sanity_Tables_enter",call_name)) {
+		if (!self_test) S_Test_Sanity_Tables_enter();
 
 	} else if (0 == strcmp("S_Test_Antennae_Select_enter",call_name)) {
 		if (!self_test) S_Test_Antennae_Select_enter();
@@ -1401,7 +1624,7 @@ void state_callback(char *call_name) {
 	} else if (0 == strcmp("S_Shutdown_loop",call_name)) {
 		if (!self_test) S_Shutdown_loop();
 
-	} else log_val("ERROR: MISSING_CALLBACK=%s\n",call_name);
+	} else log_val("ERROR: MISSING_CALLBACK='%s'\n",call_name);
 
 }
 
@@ -1423,7 +1646,7 @@ void init_state () {
 
 	StateGuiAdd("S_Init",
 	 STATE_FROM_CALLBACK,
-	 " Rocket Lander! ",
+	 " Intel Lander! ",
 //	 "1234567890123456",
 	 "I/O_Test   Start",
 	 "S_IO_STATE","S_Start",
@@ -1444,7 +1667,7 @@ void init_state () {
 		 "",
 		 "",
 		 STATE_NOP,STATE_NOP,
-		 "S_Start_At_Home_enter",ACTION_NOP,ACTION_NOP);
+		 "S_CalibrateHome_Done_enter",ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Calibrate_Home_Select",
 		 STATE_NO_VERBOSE,
@@ -1460,14 +1683,14 @@ void init_state () {
 			 "Done    (Un)Lock",
 			 "S_CalibrateHome_Done","S_CalibrateHome_Lock",
 			 ACTION_NOP,"S_CalibrateHome_loop",ACTION_NOP);
-	
+
 				StateGuiAdd("S_CalibrateHome_Done",
 				 STATE_NO_FLAGS,
 				 "",
 				 "",
 				 STATE_NOP,STATE_NOP,
 				 "S_CalibrateHome_Done_enter",ACTION_NOP,ACTION_NOP);
-	
+
 				StateGuiAdd("S_CalibrateHome_Lock",
 				 STATE_NO_VERBOSE,
 				 "",
@@ -1488,10 +1711,10 @@ void init_state () {
 		 "Move to start...",
 		 "Cancel          ",
 		 "S_Game_Done",STATE_NOP,
-		 "S_Game_Start_enter","S_Game_Start_loop",ACTION_NOP);
+		 "S_Game_Start_enter",ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Game_Play",
-		 STATE_NO_VERBOSE|STATE_FROM_CALLBACK,
+		 STATE_NO_VERBOSE|STATE_FROM_CALLBACK|STATE_NO_MENU_TEXT,
 		 "",
 		 "",
 		 "S_Game_Stop","S_Game_Display_Next",
@@ -1865,10 +2088,35 @@ void init_state () {
 
 		StateGuiAdd("S_Test_Sanity_Select",
 		 STATE_NO_FLAGS,
-		 "",
-		 "",
-		 STATE_NOP,STATE_NOP,
-		 "S_Test_Sanity_enter",ACTION_NOP,ACTION_NOP);
+		 "Sanity      Base",
+	//	 "1234567890123456",
+		 "Main        Next",
+		 "S_Main_Menu","S_Test_Sanity_State_Select",
+		 "S_Test_Sanity_Base_enter",ACTION_NOP,ACTION_NOP);
+
+		StateGuiAdd("S_Test_Sanity_State_Select",
+		 STATE_NO_FLAGS,
+		 "Sanity     State",
+	//	 "1234567890123456",
+		 "Main        Next",
+		 "S_Main_Menu","S_Test_Sanity_Positions_Select",
+		 "S_Test_Sanity_State_enter",ACTION_NOP,ACTION_NOP);
+
+		StateGuiAdd("S_Test_Sanity_Positions_Select",
+		 STATE_NO_FLAGS,
+		 "Sanity Positions",
+	//	 "1234567890123456",
+		 "Main        Next",
+		 "S_Main_Menu","S_Test_Sanity_Tables_Select",
+		 "S_Test_Sanity_Positions_enter",ACTION_NOP,ACTION_NOP);
+
+		StateGuiAdd("S_Test_Sanity_Tables_Select",
+		 STATE_NO_FLAGS,
+		 "Sanity    Tables",
+	//	 "1234567890123456",
+		 "Main        Next",
+		 "S_Main_Menu","S_Main_Menu",
+		 "S_Test_Sanity_Tables_enter",ACTION_NOP,ACTION_NOP);
 
 	StateGuiAdd("S_Test_Simulation",
 	 STATE_NO_FLAGS,
@@ -2060,7 +2308,7 @@ void init_state () {
 		 "Motor     Circle",
 	//	 "1234567890123456",
 		 "Done          Go",
-		 "S_Main_Menu","S_Calibrate_Circlen_Go",
+		 "S_Main_Menu","S_Calibrate_Circle_Go",
 		 "S_Calibrate_Circle_Enter","S_Calibrate_Circle_Loop",ACTION_NOP);
 
 			StateGuiAdd("S_Calibrate_Circle_Go",
@@ -2069,6 +2317,13 @@ void init_state () {
 			 "",
 			 STATE_NOP,STATE_NOP,
 			 "S_Calibrate_Circle_Go_enter",ACTION_NOP,ACTION_NOP);
+
+			StateGuiAdd("S_Calibrate_BumbleBee_Go",
+			 STATE_NO_VERBOSE|STATE_FROM_CALLBACK,
+			 "",
+			 "",
+			 STATE_NOP,STATE_NOP,
+			 "S_Calibrate_BumbleBee_Go_enter",ACTION_NOP,ACTION_NOP);
 
 	StateGuiAdd("S_Test_Motor_Status",
 	 STATE_NO_FLAGS,
@@ -2085,7 +2340,7 @@ void init_state () {
 		 "Done",
 		 "S_Main_Menu","S_Main_Menu",
 		 ACTION_NOP,"S_Test_Motor_Status_loop",ACTION_NOP);
-	
+
 	StateGuiAdd("S_Test_I2cDisplayTest",
 	 STATE_NO_FLAGS,
 	 "Test...         ",
@@ -2227,28 +2482,28 @@ void init_state () {
 // Flight states
 
 	StateGuiAdd("S_Flight_Linear",
-	 STATE_FROM_CALLBACK|STATE_NO_VERBOSE,
+	 STATE_FROM_CALLBACK|STATE_NO_VERBOSE|STATE_NO_MENU_TEXT,
 	 "Fly...",
 //	 "1234567890123456",
 	 "Stop   ",
 	 "S_Main_Menu",STATE_NOP,
-	 "S_Flight_Linear_loop","S_Flight_Linear_loop",ACTION_NOP);
+	 ACTION_NOP,"S_Flight_Linear_loop",ACTION_NOP);
 
 	StateGuiAdd("S_Flight_Circle",
-	 STATE_FROM_CALLBACK|STATE_NO_VERBOSE,
+	 STATE_FROM_CALLBACK|STATE_NO_VERBOSE|STATE_NO_MENU_TEXT,
 	 "Circle...",
 //	 "1234567890123456",
 	 "Stop   ",
 	 "S_Main_Menu",STATE_NOP,
-	 "S_Flight_Circle_loop","S_Flight_Circle_loop",ACTION_NOP);
+	 ACTION_NOP,"S_Flight_Circle_loop",ACTION_NOP);
 
 	StateGuiAdd("S_Flight_Wait",
-	 STATE_FROM_CALLBACK|STATE_NO_VERBOSE,
+	 STATE_FROM_CALLBACK|STATE_NO_VERBOSE|STATE_NO_MENU_TEXT,
 	 "Wait...",
 //	 "1234567890123456",
 	 "Stop   ",
 	 "S_Main_Menu",STATE_NOP,
-	 "S_Flight_Wait_loop","S_Flight_Wait_loop",ACTION_NOP);
+	 ACTION_NOP,"S_Flight_Wait_loop",ACTION_NOP);
 
 
 // Self test: orphaned state with bad-links
@@ -2275,13 +2530,13 @@ void init_state () {
  */
 
 void state_loop() {
-	
+
 	/* New frame, new state? */
 	if (NULL != state_next_frame) {
 		goto_state(state_next_frame);
 		state_next_frame = NULL;
 	}
-	
+
 	/* Process Buttons (default mode is toggle) */
 	if (r_control.button_a && r_control.button_b) {
 		goto_state("S_Main_Menu");
