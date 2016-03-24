@@ -1,4 +1,4 @@
-/* rocket_measure.c - Rocket Lander Game */
+/* rocket_math.c - Rocket Lander Game */
 
 /* <legal-notice>
  *
@@ -15,18 +15,18 @@
  *
  * </legal-notice>
  */
- 
+
  /*
  * Theory of Implementation
  *
  * This file contains the advanced math computation routines
  * It provised integer routines for game play
- * It provides flouting point routines for calibration and curved rocket motions  
+ * It provides flouting point routines for calibration and curved rocket motions
  *
  * This file features:
  *  - Interget version of the square root function (game-time distances)
  *  - Least-square approximation of motor steps to tower cable micro-meters
- *  - Curve routines for the come-hither and self-play modes 
+ *  - Curve routines for the come-hither and self-play modes
  *
  */
 
@@ -39,7 +39,7 @@
 #include "rocket.h"
 #include "rocket_state.h"
 #include "rocket_space.h"
-#include "rocket_math.h" 
+#include "rocket_math.h"
 
 /*
  * square_root_binary_search : approximation for square root function
@@ -49,7 +49,7 @@
 int sqrt_cnt=0;	// loop protection counter
 
 // Newton-Raphson method
-//   NOTE: allowed accuracy of (1..-1) avoids infinite bounce between 1 and -1
+//   NOTE: allowed accuracy of "< 2" avoids infinite bounce between 1 and -1
 static int32_t do_sqrt_rocket(int32_t x, int32_t init_guess)
 {	int32_t next_guess;
 
@@ -57,7 +57,7 @@ static int32_t do_sqrt_rocket(int32_t x, int32_t init_guess)
 		PRINT("#############SQRT_TOOMANY(%ld,%ld\n",x,init_guess);
 		return init_guess;
 	}
-	
+
 	// if we reach 0=init_guess, then the number and answer is zero
 	if ((0 == x) || (0 == init_guess)) return 0;
 
@@ -71,44 +71,201 @@ static int32_t do_sqrt_rocket(int32_t x, int32_t init_guess)
 int32_t sqrt_rocket(int32_t x) {
 	sqrt_cnt=0;
 
+	// scale the initial guess to reduce iteration loops
 	if      (    6824L > x) return(do_sqrt_rocket(x, 50));
 	else if (  682400L > x) return(do_sqrt_rocket(x, 500));
 	else                    return(do_sqrt_rocket(x, 5000));
 }
 
 /*
- * convert micrometers to and from steps, using respective tower's linear equation
+ * explicitly convert between micrometers and millimeters
  *
  */
 
-int32_t micrometers2steps(int32_t tower,int32_t value) {
-	value <<= r_towers[tower].um2step_scaler;
-	value  /= r_towers[tower].um2step_slope;
-	value  += r_towers[tower].um2step_offset;
-	return (value);
-}
-
-int32_t steps2micrometers(int32_t tower,int32_t value) {
-	value  -= r_towers[tower].um2step_offset;
-	value  *= r_towers[tower].um2step_slope;
-	value >>= r_towers[tower].um2step_scaler;
-	return (value);
-}
-
-int32_t n2m(int32_t value) {
+int32_t micro2millimeter(int32_t value) {
 	if (0 <= value)
 		return((value+500L)/1000L);
 	else
 		return((value-500L)/1000L);
 }
 
+int32_t milli2micrometer(int32_t value) {
+	return(value*1000L);
+}
+
 /*
- * compass_adjustment : tool to adjust the (initial) position of the rocket
- *			calculate joystick position to compass direction, slider to speed
+ * tower spool length calibrate : extrapolate tower uMeters to steps from measurement table
  *
  */
 
-void compass_adjustment(uint8_t command, struct CompassRec *compass) {
+struct TOWER_SPOOL_SAMPLES {
+	uint32_t length;	// measured length (mm)
+	uint32_t steps;		// measured steps
+};
+
+#define TOWER_SPOOL_SAMPLES_MAX 22
+
+struct TOWER_SPOOL_SAMPLES spool_samples[4][TOWER_SPOOL_SAMPLES_MAX] = {
+	// NW
+	{
+		{	100,1919},
+		{	132,2119},
+		{	163,2319},
+		{	195,2519},
+		{	227,2719},
+		{	259,2919},
+		{	291,3119},
+		{	323,3319},
+		{	355,3519},
+		{	385,3719},
+		{	418,3919},
+		{	448,4119},
+		{	477,4319},
+		{	508,4519},
+		{	538,4719},
+		{	569,4919},
+		{	599,5119},
+		{	628,5319},
+		{	658,5519},
+		{	687,5719},
+		{	716,5919},
+		{	745,9119}
+	},
+	// NE
+	{
+		{	100,1919},
+		{	132,2119},
+		{	163,2319},
+		{	195,2519},
+		{	227,2719},
+		{	259,2919},
+		{	291,3119},
+		{	323,3319},
+		{	355,3519},
+		{	385,3719},
+		{	418,3919},
+		{	448,4119},
+		{	477,4319},
+		{	508,4519},
+		{	538,4719},
+		{	569,4919},
+		{	599,5119},
+		{	628,5319},
+		{	658,5519},
+		{	687,5719},
+		{	716,5919},
+		{	745,9119}
+		},
+	// SW
+	{
+		{	100,1919},
+		{	132,2119},
+		{	163,2319},
+		{	195,2519},
+		{	227,2719},
+		{	259,2919},
+		{	291,3119},
+		{	323,3319},
+		{	355,3519},
+		{	385,3719},
+		{	418,3919},
+		{	448,4119},
+		{	477,4319},
+		{	508,4519},
+		{	538,4719},
+		{	569,4919},
+		{	599,5119},
+		{	628,5319},
+		{	658,5519},
+		{	687,5719},
+		{	716,5919},
+		{	745,9119}
+		},
+	// SE
+	{
+		{	100,1919},
+		{	132,2119},
+		{	163,2319},
+		{	195,2519},
+		{	227,2719},
+		{	259,2919},
+		{	291,3119},
+		{	323,3319},
+		{	355,3519},
+		{	385,3719},
+		{	418,3919},
+		{	448,4119},
+		{	477,4319},
+		{	508,4519},
+		{	538,4719},
+		{	569,4919},
+		{	599,5119},
+		{	628,5319},
+		{	658,5519},
+		{	687,5719},
+		{	716,5919},
+		{	745,9119}
+	}
+};
+
+int32_t micrometers2steps(int32_t tower,int32_t um) {
+	int32_t millimeters,steps;
+	uint8_t i;
+
+	millimeters = micro2millimeter(um);
+	if (millimeters < spool_samples[tower][0].length)
+		return(spool_samples[tower][0].steps);
+	if (millimeters > spool_samples[tower][TOWER_SPOOL_SAMPLES_MAX-1].length)
+		return(spool_samples[tower][TOWER_SPOOL_SAMPLES_MAX-1].steps);
+
+	for (i=0;i<TOWER_SPOOL_SAMPLES_MAX;) {
+		if (spool_samples[tower][i+1].length > millimeters) {
+			break;
+		} else {
+			i++;
+		}
+	}
+
+	steps  = millimeters - spool_samples[tower][i].length;
+	steps *= spool_samples[tower][i+1].steps  - spool_samples[tower][i].steps;
+	steps /= spool_samples[tower][i+1].length - spool_samples[tower][i].length;
+	steps += spool_samples[tower][i].steps;
+
+	return (steps);
+}
+
+int32_t steps2micrometers(int32_t tower,int32_t steps) {
+	int32_t millimeters;
+	uint8_t i;
+
+	if (steps < spool_samples[tower][0].steps)
+		return(milli2micrometer(spool_samples[tower][0].length));
+	if (steps > spool_samples[tower][TOWER_SPOOL_SAMPLES_MAX-1].steps)
+		return(milli2micrometer(spool_samples[tower][TOWER_SPOOL_SAMPLES_MAX-1].length));
+
+	for (i=0;i<TOWER_SPOOL_SAMPLES_MAX;) {
+		if (spool_samples[tower][i+1].steps > steps) {
+			break;
+		} else {
+			i++;
+		}
+	}
+
+	millimeters  = steps - spool_samples[tower][i].steps;
+	millimeters *= spool_samples[tower][i+1].length - spool_samples[tower][i].length;
+	millimeters /= spool_samples[tower][i+1].steps  - spool_samples[tower][i].steps;
+	millimeters += spool_samples[tower][i].length;
+
+	return (milli2micrometer(millimeters));
+}
+
+/*
+ * compass_select : tool to select the (initial) position of the rocket or menu selection
+ *			calculate joystick position to compass direction/selection, slider to speed/scale
+ *
+ */
+
+void compass_select(uint8_t command, struct CompassRec *compass) {
     int32_t x_delta,y_delta,z_delta;
 
     if (COMPASS_INIT == command) {
@@ -118,15 +275,15 @@ void compass_adjustment(uint8_t command, struct CompassRec *compass) {
         compass->ne_inc=0;
         compass->sw_inc=0;
         compass->se_inc=0;
-        compass->x=0;
-        compass->y=0;
-        compass->z=0;
+        compass->x=ROCKET_HOME_X;
+        compass->y=ROCKET_HOME_Y;
+        compass->z=ROCKET_HOME_Z;
         compass->name = "";
         compass->lock = false;
         return;
     }
-    
-	// Convert joystick to compass selection
+
+	// Convert joystick direction to compass selection
 	x_delta = r_control.analog_x - JOYSTICK_X_MID;
 	if (x_delta < -JOYSTICK_DELTA_XY_MIN) {
 		x_delta = -1;
@@ -135,8 +292,6 @@ void compass_adjustment(uint8_t command, struct CompassRec *compass) {
 	} else {
 		x_delta = 0;
 	}
-
-	// Thruster Y is 'on-forward or 'on-backward' or 'off'
 	y_delta = r_control.analog_y - JOYSTICK_Y_MID;
 	if (y_delta < -JOYSTICK_DELTA_XY_MIN) {
 		y_delta = -1;
@@ -165,24 +320,27 @@ void compass_adjustment(uint8_t command, struct CompassRec *compass) {
     		y_delta = compass->calibration_lock_y;
         }
     }
-	
+
 	// Thruster Z is 'proportion-up or 'proportion-down' or 'off'
 	z_delta = r_control.analog_z - JOYSTICK_Z_MID;
 	if (z_delta < -JOYSTICK_DELTA_Z_MIN) {
 		z_delta = (z_delta+JOYSTICK_DELTA_Z_MIN)*ROCKET_CALIBRATE_INC_Z;
-	}
-	if (z_delta > JOYSTICK_DELTA_Z_MIN) {
+	} else if (z_delta > JOYSTICK_DELTA_Z_MIN) {
 		z_delta = (z_delta-JOYSTICK_DELTA_Z_MIN)*ROCKET_CALIBRATE_INC_Z;
+	} else {
+		z_delta = 0;
 	}
 
 	// scale Z from nm to steps
 	if (COMPASS_CALC_HOME == command) {
-    	z_delta = micrometers2steps(ROCKET_TOWER_NW,z_delta);
+    	z_delta = (z_delta * 10L) / ROCKET_TOWER_STEP_PER_UM10;
     } else if (COMPASS_CALC_TILT == command) {
         // TODO ############## scale to fine tilt control
-    	z_delta = micrometers2steps(ROCKET_TOWER_NW,z_delta);
+    	z_delta = (z_delta * 10L) / ROCKET_TOWER_STEP_PER_UM10;
     } else if (COMPASS_CALC_POS == command) {
     	// ignore Z for now, use later for position scaling
+    } else if (COMPASS_CALC_CIRC == command) {
+    	// ignore Z for now, use later for circle scaling
     } else {
         // unknown command
         return;
@@ -192,68 +350,70 @@ void compass_adjustment(uint8_t command, struct CompassRec *compass) {
 	if (COMPASS_CALC_POS ==  command) {
 		if        ((x_delta < 0) && (y_delta > 0)) {
 			compass->name = "NW+10";
-			compass->x=-100000L;
-			compass->y= 100000L;
-			compass->z= 100000L;
+			compass->x=ROCKET_HOME_X-100000L;
+			compass->y=ROCKET_HOME_Y+100000L;
+			compass->z=ROCKET_HOME_Z+100000L;
 		} else if ((x_delta == 0) && (y_delta > 0)) {
 			compass->name = "HM+05";
-			compass->x=      0L;
-			compass->y=      0L;
-			compass->z=  50000L;
+			compass->x=ROCKET_HOME_X+     0L;
+			compass->y=ROCKET_HOME_Y+     0L;
+			compass->z=ROCKET_HOME_Z+ 50000L;
 		} else if ((x_delta > 0) && (y_delta > 0)) {
 			compass->name = "NE+10";
-			compass->x= 100000L;
-			compass->y= 100000L;
-			compass->z= 100000L;
+			compass->x=ROCKET_HOME_X+100000L;
+			compass->y=ROCKET_HOME_Y+100000L;
+			compass->z=ROCKET_HOME_Z+100000L;
 		} else if ((x_delta > 0) && (y_delta == 0)) {
 			compass->name = "HM+10";
-			compass->x=      0L;
-			compass->y=      0L;
-			compass->z= 100000L;
+			compass->x=ROCKET_HOME_X+     0L;
+			compass->y=ROCKET_HOME_Y+     0L;
+			compass->z=ROCKET_HOME_Z+100000L;
 		} else if ((x_delta > 0) && (y_delta < 0)) {
 			compass->name = "SE+10";
-			compass->x= 100000L;
-			compass->y=-100000L;
-			compass->z= 100000L;
+			compass->x=ROCKET_HOME_X+100000L;
+			compass->y=ROCKET_HOME_Y-100000L;
+			compass->z=ROCKET_HOME_Z+100000L;
 		} else if ((x_delta == 0) && (y_delta < 0)) {
 			compass->name = "HM+15";
-			compass->x=      0L;
-			compass->y=      0L;
-			compass->z= 150000L;
+			compass->x=ROCKET_HOME_X+     0L;
+			compass->y=ROCKET_HOME_Y+     0L;
+			compass->z=ROCKET_HOME_Z+150000L;
 		} else if ((x_delta < 0) && (y_delta < 0)) {
 			compass->name = "SW+10";
-			compass->x=-100000L;
-			compass->y=-100000L;
-			compass->z= 100000L;
+			compass->x=ROCKET_HOME_X-100000L;
+			compass->y=ROCKET_HOME_Y-100000L;
+			compass->z=ROCKET_HOME_Z+100000L;
 		} else if ((x_delta < 0) && (y_delta == 0)) {
 			compass->name = "HM+20";
-			compass->x=      0L;
-			compass->y=      0L;
-			compass->z= 200000L;
+			compass->x=ROCKET_HOME_X+     0L;
+			compass->y=ROCKET_HOME_Y+     0L;
+			compass->z=ROCKET_HOME_Z+200000L;
 		} else if ((x_delta == 0) && (y_delta == 0)) {
 			// if center, then true home
 			compass->name = "HM+00";
-			compass->x= 0L;
-			compass->y= 0L;
-			compass->z= 0L;
+			compass->x=ROCKET_HOME_X+0L;
+			compass->y=ROCKET_HOME_Y+0L;
+			compass->z=ROCKET_HOME_Z+0L;
 		}
 	} else if (COMPASS_CALC_CIRC ==  command) {
 		if        ((x_delta < 0) && (y_delta > 0)) {
-			compass->name = "Z";
+			compass->name = "      ";
 		} else if ((x_delta == 0) && (y_delta > 0)) {
-			compass->name = "Z";
+			compass->name = "Z_Circ";
 		} else if ((x_delta > 0) && (y_delta > 0)) {
-			compass->name = "Z";
+			compass->name = "Bumble";
 		} else if ((x_delta > 0) && (y_delta == 0)) {
-			compass->name = "Y";
+			compass->name = "Y_Circ";
 		} else if ((x_delta > 0) && (y_delta < 0)) {
-			compass->name = "X";
+			compass->name = "      ";
 		} else if ((x_delta == 0) && (y_delta < 0)) {
-			compass->name = "A";
+			compass->name = "X_Circ";
 		} else if ((x_delta < 0) && (y_delta < 0)) {
-			compass->name = " ";
+			compass->name = "      ";
 		} else if ((x_delta < 0) && (y_delta == 0)) {
-			compass->name = " ";
+			compass->name = "All   ";
+		} else if ((x_delta == 0) && (y_delta == 0)) {
+			compass->name = "Home  ";
 		}
 	} else {
 		if        ((x_delta < 0) && (y_delta > 0)) {
@@ -295,107 +455,6 @@ void compass_adjustment(uint8_t command, struct CompassRec *compass) {
 	}
 }
 
-struct TOWER_SPOOL_SAMPLES {
-	double steps;		// measured steps
-	double length;		// measured length (um)
-};
-
-
-/*
- * least squares approximation 
- *   y = a + bx
- *   Sx, Sy, Sxx, Sxy, Syy
- *   b = ((n * Sxy) - (Sx * Sy))/((n * Sxx) - (Sx * Sx)
- *   a = ((1/n)*Sy) - (b*((1/n)*Sx))
- */
-
-#define SAMPLE_SCALE 100
-
-static void samples_least_squares(struct TOWER_SPOOL_SAMPLES samples[], uint8_t count,struct ROCKET_TOWER_S *tower) {
-	double Sx=0;
-	double Sy=0;
-	double Sxx=0;
-	double Sxy=0;
-	double Syy=0;
-	double b=0;
-	double a=0;  
-	double x,y;  
-	uint8_t i;
-	
-	for (i=0;i<count;i++) {
-		x=samples[i].steps;
-		y=samples[i].length;
-		
-		Sx += x;
-		Sy += y;
-		Sxx += x*x;
-		Sxy += x*y;
-		Syy += y*y;
-	}
-	
-	b = ((count * Sxy) - (Sx * Sy)) / ((count * Sxx) - (Sx * Sx));
-	a = (Sy - (b*Sx)) / count;
-	
-	tower->um2step_slope  = (int32_t) (b * 8.0); /* 8 = 2^3 = um2step_scaler */
-	tower->um2step_offset = (int32_t) (a * 1.0);
-}
-
-
-/*
- * tower spool calibrate : compute tower uMeters per step from measurement table 
- *			using least squares approximation
- *
- */
-
-/* default length is to center = srqt(240000^2 + 170000^2 + 580000^2) = 650308
- * default steps is  650308 / 125.6 = 518
- */
-
-struct TOWER_SPOOL_SAMPLES samples_test[] = {
-    {	    1.47,    52.21},
-    {	    1.50,    53.12},
-    {	    1.52,    54.48},
-    {	    1.55,    55.84},
-    {	    1.57,    57.20},
-    {	    1.60,    58.57},
-    {	    1.63,    59.93},
-    {	    1.65,    61.29},
-    {	    1.68,    63.11},
-    {	    1.70,    64.47},
-    {	    1.73,    66.28},
-    {	    1.75,    68.10},
-    {	    1.78,    69.92},
-    {	    1.80,    72.19},
-    {	    1.83,    74.46},    
-} ;
-
-struct TOWER_SPOOL_SAMPLES samples_nw[] = {
-    {	    0L,      0L},
-    {    5178L, 650308L},
-} ;
-
-struct TOWER_SPOOL_SAMPLES samples_ne[] = {
-    {	    0L,    0L},
-    {    5178L, 650308L},
-} ;
-
-struct TOWER_SPOOL_SAMPLES samples_sw[] = {
-    {	    0L,    0L},
-    {    5178L, 650308L},
-} ;
-
-struct TOWER_SPOOL_SAMPLES samples_se[] = {
-    {	    0L,    0L},
-    {    5178L, 650308L},
-} ;
-
-void compute_tower_step_to_nm() {
-	samples_least_squares(samples_test, 15, &r_towers[ROCKET_TOWER_NW]); /* unit test: b=61.27, a=-39.06 */
-	samples_least_squares(samples_nw, 2, &r_towers[ROCKET_TOWER_NW]);
-	samples_least_squares(samples_nw, 2, &r_towers[ROCKET_TOWER_NE]);
-	samples_least_squares(samples_nw, 2, &r_towers[ROCKET_TOWER_SW]);
-	samples_least_squares(samples_nw, 2, &r_towers[ROCKET_TOWER_SE]);
-}
 
 /*
  * trigonomety tables, using linear interpolation
@@ -561,12 +620,12 @@ double degrees2sine(int16_t degrees) {
 int16_t atan2degrees(double x, double y) {
 	double value;
 
-	if (y < 0.0001) y = 0.0001;
-	value = x/y;
+	if (x < 0.0001) x = 0.0001;
+	value = y/x;
 
 	if (value < -14.300666) return(-90);
 	if (value >  14.300666) return( 90);
-	
+
 	for (int i=0;i<MATH_ATAN_MAX;i++) {
 		if (value < tan_table[i+1].value) {
 			double value_scale = (value - tan_table[i].value)/(tan_table[i+1].value-tan_table[i].value);
@@ -605,33 +664,41 @@ struct ROCKET_FLIGHT_S r_flight;
 
 void flight_init () {
 	r_flight.dx=0; r_flight.dy=0; r_flight.dz=0;
+
 	r_flight.ax=0; r_flight.ay=0; r_flight.az=0;
+	r_flight.current_ax=0; r_flight.current_ay=0; r_flight.current_az=0;
+	r_flight.center_x=0;
+	r_flight.center_y=0;
+	r_flight.center_z=0;
+	r_flight.radius=0;
+
 	r_flight.speed=DEFAULT_SPEED;
 	r_flight.current_x=0; r_flight.current_y=0; r_flight.current_z=0;
 	r_flight.final_x  =0; r_flight.final_y  =0; r_flight.final_z  =0;
 	r_flight.frame_count=0;
 	r_flight.frame_max  =0;
-	r_flight.state_done=STATE_NOP;	
+	r_flight.state_done=STATE_NOP;
  }
 
-/* speed is millimeters per second 
+/* speed is millimeters per second
  * Given that the tower cable speed max is 4 rps * 200 steps/rpm * 125.6 uM/step = 100 mm/sec,
  * let us suggest a safe and sane speed of 80 mm/sec, which is 16 mm per frame
  */
 
-#define DEFAULT_LINEAR_MM_PER_SECOND 50
+//#define DEFAULT_LINEAR_MM_PER_SECOND 50
+#define DEFAULT_LINEAR_MM_PER_SECOND 80
 
 void flight_linear (int32_t dest_x,int32_t dest_y,int32_t dest_z, int32_t speed) {
 	int32_t length;
-	
+
 	flight_init();
-	
-	r_flight.final_x = dest_x; 
-	r_flight.final_y = dest_y; 
+
+	r_flight.final_x = dest_x;
+	r_flight.final_y = dest_y;
 	r_flight.final_z = dest_z;
 
-	r_flight.current_x=r_space.rocket_x; 
-	r_flight.current_y=r_space.rocket_y; 
+	r_flight.current_x=r_space.rocket_x;
+	r_flight.current_y=r_space.rocket_y;
 	r_flight.current_z=r_space.rocket_z;
 
 	length = get_length(
@@ -641,14 +708,20 @@ void flight_linear (int32_t dest_x,int32_t dest_y,int32_t dest_z, int32_t speed)
 		dest_x,
 		dest_y,
 		dest_z);
-	if (0 == length) {
-		return;
-	}
-	
+
 	if (MOTOR_SPEED_AUTO == speed) {
 		speed = DEFAULT_LINEAR_MM_PER_SECOND;
 	}
-	r_flight.frame_max = (length/1000L)/(speed/FRAMES_PER_SECOND);	
+	if (0 == speed) {
+		r_flight.frame_max = 0;
+		return;
+	}
+	r_flight.frame_max = (length/1000L)/(speed/FRAMES_PER_SECOND);
+	if (0 == r_flight.frame_max) {
+		return;
+	} else if (200 < r_flight.frame_max) {
+		r_flight.frame_max = 200;
+	}
 	r_flight.dx=(dest_x-r_flight.current_x)/r_flight.frame_max;
 	r_flight.dy=(dest_y-r_flight.current_y)/r_flight.frame_max;
 	r_flight.dz=(dest_z-r_flight.current_z)/r_flight.frame_max;
@@ -656,37 +729,36 @@ void flight_linear (int32_t dest_x,int32_t dest_y,int32_t dest_z, int32_t speed)
 
 void flight_linear_loop () {
 	r_flight.frame_count++;
-	
+
 	if (r_flight.frame_count < r_flight.frame_max) {
-		r_flight.current_x += r_flight.dx; 
-		r_flight.current_y += r_flight.dy; 
+		r_flight.current_x += r_flight.dx;
+		r_flight.current_y += r_flight.dy;
 		r_flight.current_z += r_flight.dz;
 	} else {
 		// if last step, jump to the end (and resolve roundoff errors)
-		r_flight.current_x = r_flight.final_x; 
-		r_flight.current_y = r_flight.final_y; 
+		r_flight.current_x = r_flight.final_x;
+		r_flight.current_y = r_flight.final_y;
 		r_flight.current_z = r_flight.final_z;
 	}
-	
+
 	r_space.rocket_goal_x = r_flight.current_x;
 	r_space.rocket_goal_y = r_flight.current_y;
 	r_space.rocket_goal_z = r_flight.current_z;
 	compute_rocket_cable_lengths();
 	move_rocket_next_position();
-
 }
 
 void flight_wait (int32_t frame_count) {
 	flight_init();
 
-	r_flight.final_x = r_space.rocket_x; 
-	r_flight.final_y = r_space.rocket_y; 
+	r_flight.final_x = r_space.rocket_x;
+	r_flight.final_y = r_space.rocket_y;
 	r_flight.final_z = r_space.rocket_z;
 
-	r_flight.current_x=r_flight.final_x; 
-	r_flight.current_y=r_flight.final_y; 
+	r_flight.current_x=r_flight.final_x;
+	r_flight.current_y=r_flight.final_y;
 	r_flight.current_z=r_flight.final_z;
-	
+
 	r_flight.frame_max = frame_count;
 }
 
@@ -695,9 +767,83 @@ void flight_wait_loop () {
 }
 
 void flight_circular (int32_t ax,int32_t ay,int32_t az, int32_t center_x, int32_t center_y, int32_t center_z, int32_t frame_count) {
+	flight_init();
 
+	r_flight.ax=ax;
+	r_flight.ay=ay;
+	r_flight.az=az;
+
+	r_flight.center_x=center_x;
+	r_flight.center_y=center_y;
+	r_flight.center_z=center_z;
+
+	r_flight.current_x = r_space.rocket_x;
+	r_flight.current_y = r_space.rocket_y;
+	r_flight.current_z = r_space.rocket_z;
+
+	r_flight.radius=get_length(
+		r_space.rocket_x,
+		r_space.rocket_y,
+		r_space.rocket_z,
+		center_x,
+		center_y,
+		center_z);
+
+	/* compute current degrees */
+	// ### TODO : SHORT CUT FOR NOW
+	if        ((10000L == r_space.rocket_x) && (0L == r_space.rocket_y) && (20000L==r_space.rocket_z)) {
+		r_flight.current_ax=0; r_flight.current_ay=0; r_flight.current_az=0;
+	} else if ((0L == r_space.rocket_x) && (10000L == r_space.rocket_y) && (20000L==r_space.rocket_z)) {
+		r_flight.current_ax=0; r_flight.current_ay=0; r_flight.current_az=90;
+	} else {
+		r_flight.current_ax=0; r_flight.current_ay=0; r_flight.current_az=0;
+	}
+
+	r_flight.frame_max = frame_count;
 }
 
 void flight_circular_loop () {
-	
-} 
+	float x=1.0,y=1.0,z=1.0;
+	r_flight.frame_count++;
+
+	/* increment angles */
+	r_flight.current_ax = (r_flight.current_ax + r_flight.ax) % 360;
+	r_flight.current_ay = (r_flight.current_ay + r_flight.ay) % 360;
+	r_flight.current_az = (r_flight.current_az + r_flight.az) % 360;
+
+	/* find next rotation destination points */
+	if        ((0 == r_flight.current_ay) && (0 == r_flight.current_ax)) {
+		// simple rotate on z-axis
+		x = degrees2cosine(r_flight.current_az);
+		y = degrees2sine(  r_flight.current_az);
+		r_flight.current_x = ((int32_t) (x * r_flight.radius)) + r_flight.center_x;
+		r_flight.current_y = ((int32_t) (y * r_flight.radius)) + r_flight.center_y;
+		// Z is unchanged
+	} else if ((0 == r_flight.current_az) && (0 == r_flight.current_ax)) {
+		// simple rotate on y-axis
+		x = degrees2cosine(r_flight.current_ay);
+		z = degrees2sine(  r_flight.current_ay);
+		r_flight.current_x = ((int32_t) (x * r_flight.radius)) + r_flight.center_x; ;
+		r_flight.current_z = ((int32_t) (z * r_flight.radius)) + r_flight.center_z; ;
+		// Y is unchanged
+	} else if ((0 == r_flight.current_az) && (0 == r_flight.current_ay)) {
+		// simple rotate on x-axis
+		y = degrees2cosine(r_flight.current_ax);
+		z = degrees2sine(  r_flight.current_ax);
+		r_flight.current_y = ((int32_t) (y * r_flight.radius)) + r_flight.center_y; ;
+		r_flight.current_z = ((int32_t) (z * r_flight.radius)) + r_flight.center_z; ;
+		// X is unchanged
+	} else {
+		// complex tait_brian rotation
+	}
+
+	// send the coordinates to the rocket
+	r_space.rocket_goal_x = r_flight.current_x;
+	r_space.rocket_goal_y = r_flight.current_y;
+	r_space.rocket_goal_z = r_flight.current_z;
+	if (!self_test) {
+		compute_rocket_cable_lengths();
+		move_rocket_next_position();
+	}
+}
+
