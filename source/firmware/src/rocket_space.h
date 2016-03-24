@@ -4,45 +4,62 @@
  *
  * Copyright (c) 2016 Wind River Systems, Inc.
  *
- * This software has been developed and/or maintained under the Wind River 
- * CodeSwap program. The right to copy, distribute, modify, or otherwise 
+ * This software has been developed and/or maintained under the Wind River
+ * CodeSwap program. The right to copy, distribute, modify, or otherwise
  * make use of this software may be licensed only pursuant to the terms
  * of an applicable Wind River license agreement.
- * 
+ *
  * <credits>
  *   { David Reyna,  david.reyna@windriver.com,  },
  * </credits>
  *
  * </legal-notice>
  */
- 
+
 
 // Dimensions of game mechanical space, in uMeters, referenced from game center
 // tower dimensions: 580 mm high, 480 mm wide, 340 mm deep
-#define X_POS_MIN -240000	// in uMeters ...
-#define X_POS_MAX  240000
-#define Y_POS_MIN -170000
-#define Y_POS_MAX  170000
-#define Z_POS_MIN       0
-#define Z_POS_MAX  580000
+//#define X_POS_MIN -250000	// in uMeters ...
+//#define X_POS_MAX  250000
+//#define Y_POS_MIN -175000
+//#define Y_POS_MAX  175000
+#define X_POS_MIN       0L	// in uMeters ...
+#define X_POS_MAX  500000L
+#define Y_POS_MIN       0L
+#define Y_POS_MAX  350000L
+#define Z_POS_MIN       0L
+#define Z_POS_MAX  550000L
 
 // Dimensions of game play space, in uMeters, referenced from game center
 // Assume 10mm from top, 50 mm from sides
-#define GAME_X_POS_MIN -190000	// in uMeters ...
-#define GAME_X_POS_MAX   90000
-#define GAME_Y_POS_MIN -120000
-#define GAME_Y_POS_MAX  120000
-#define GAME_Z_POS_MIN       0
-#define GAME_Z_POS_MAX  480000
+#define GAME_X_POS_MIN (X_POS_MIN + 50000L)	// in uMeters ...
+#define GAME_X_POS_MAX (X_POS_MAX - 50000L)
+#define GAME_Y_POS_MIN (Y_POS_MIN + 50000L)
+#define GAME_Y_POS_MAX (Y_POS_MAX - 50000L)
+#define GAME_Z_POS_MIN  Z_POS_MIN
+#define GAME_Z_POS_MAX (Z_POS_MAX - 70000L)
 
 // Dimensions of game rocket, in uMeters, referenced from rocket center
-// rocket mount is 22 mm x 37 mm x 15 mm high
-#define ROCKET_MOUNT_X_POS_MIN -17500	// in uMeters ...
-#define ROCKET_MOUNT_X_POS_MAX  17500
-#define ROCKET_MOUNT_Y_POS_MIN -11000
-#define ROCKET_MOUNT_Y_POS_MAX  11000
-#define ROCKET_MOUNT_Z_POS_MIN      0
-#define ROCKET_MOUNT_Z_POS_MAX  15000
+// rocket mount is X:50 mm x Y:30 mm x Z:25 mm high
+//#define ROCKET_MOUNT_X_POS_MIN  25000	// in uMeters ...
+//#define ROCKET_MOUNT_X_POS_MAX  25000
+//#define ROCKET_MOUNT_Y_POS_MIN  15000
+//#define ROCKET_MOUNT_Y_POS_MAX  15000
+#define ROCKET_MOUNT_X_POS_MIN  0L	// in uMeters ...
+#define ROCKET_MOUNT_X_POS_MAX  0L
+#define ROCKET_MOUNT_Y_POS_MIN  0L
+#define ROCKET_MOUNT_Y_POS_MAX  0L
+#define ROCKET_MOUNT_Z_POS_MIN  0L
+#define ROCKET_MOUNT_Z_POS_MAX  50000L
+
+// Home positions
+#define ROCKET_HOME_X         ((X_POS_MAX-X_POS_MIN)/2L) // this is the power off rocket step home position
+#define ROCKET_HOME_Y         ((Y_POS_MAX-Y_POS_MIN)/2L)
+#define ROCKET_HOME_Z         0L // this canis negative to provide cable slack (in um)
+#define ROCKET_CALIBRATE_X	  ((X_POS_MAX-X_POS_MIN)/2L)	// this is the calibration point rocket home position
+#define ROCKET_CALIBRATE_Y	  ((Y_POS_MAX-Y_POS_MIN)/2L)
+#define ROCKET_CALIBRATE_Z	  0L
+
 // Scale of game space to real space
 // Assume one millimeter to 1 meter => moon space of ~1000 meters square
 #define SCALE_GAME_UMETER_TO_MOON_METER 1000
@@ -82,13 +99,6 @@
 #define ROCKET_TOWER_SW_ADDR	0x82
 #define ROCKET_TOWER_SE_ADDR	0x83
 
-#define ROCKET_HOME_X         0 // this is the power off rocket step home position
-#define ROCKET_HOME_Y         0
-#define ROCKET_HOME_Z         0 // this is negative to provide cable slack (in um)
-#define ROCKET_CALIBRATE_X	  0	// this is the calibration point rocket home position
-#define ROCKET_CALIBRATE_Y	  0
-#define ROCKET_CALIBRATE_Z	  0
-								
 // Assume  Z full movement provides 10 millimeter/second
 #define ROCKET_CALIBRATE_INC_Z 10000/(JOYSTICK_Z_MAX-JOYSTICK_Z_MID)
 
@@ -129,7 +139,7 @@ struct ROCKET_TOWER_S {
 
 	int32_t	um2step_slope;	// linear equation for um per step
 	int32_t	um2step_scaler;	// scale the slope for extra digits of precision
-	int32_t	um2step_offset;	// 
+	int32_t	um2step_offset;	//
 
 	int32_t	speed;			// stepper motor speed
 };
@@ -173,11 +183,13 @@ void init_rocket_game (int32_t pos_x, int32_t pos_y, int32_t pos_z, int32_t fuel
 
 void compute_rocket_next_position();
 void compute_rocket_cable_lengths();
+void compute_rocket_cable_lengths_verbose();
 void move_rocket_next_position();
 void simulate_move_rocket_next_position();
 uint8_t query_rocket_progress();
 void rocket_increment_send(int32_t increment_nw, int32_t increment_ne, int32_t increment_sw, int32_t increment_se);
 
+void set_rocket_position();
 void rocket_position_send();
 void rocket_command_send(uint8_t command);
 
