@@ -4,18 +4,18 @@
  *
  * Copyright (c) 2016 Wind River Systems, Inc.
  *
- * This software has been developed and/or maintained under the Wind River 
- * CodeSwap program. The right to copy, distribute, modify, or otherwise 
+ * This software has been developed and/or maintained under the Wind River
+ * CodeSwap program. The right to copy, distribute, modify, or otherwise
  * make use of this software may be licensed only pursuant to the terms
  * of an applicable Wind River license agreement.
- * 
+ *
  * <credits>
  *   { David Reyna,  david.reyna@windriver.com,  },
  * </credits>
  *
  * </legal-notice>
  */
- 
+
 /*
  * Theory of Implementation
  *
@@ -43,15 +43,15 @@
 #include "rocket_space.h"
 #include "rocket_math.h"
 
-/* 
+/*
  * forward declarations
  *
  */
- 
+
 void rocket_position_send();
 void rocket_command_send(uint8_t command);
 static void move_rocket_position();
-static void set_rocket_position();
+void set_rocket_position();
 
 /*
  * Rocket Control Structures
@@ -132,13 +132,9 @@ bool init_rocket_hardware () {
 	r_space.rocket_x = 0;		// current game-space rocket position, in uMeters
 	r_space.rocket_y = 0;
 	r_space.rocket_z = 0;
-	
+
 	r_space.speed_max = 1250;  	// minimum microseconds per step => maximum speed (mSec) = 240 rpm (NOTE:1000 mSec too fast for NEMA-17)
 
-	// 
-	//compute_tower_step_to_nm(&r_towers);
-	compute_tower_step_to_nm();
-	
 	// Initialize XYZ motor controls
 	if (IO_MOTOR_ENABLE) {
 		// TODO ################
@@ -161,6 +157,7 @@ void init_rocket_game (int32_t pos_x, int32_t pos_y, int32_t pos_z, int32_t fuel
 		// for game pre-test, skip motor move to initial position
 		mode |= GAME_AT_START;
 	}
+	r_game.game_mode = mode;
 
 	// TODO ################### Adjust
 	r_game.fuel_option = fuel;
@@ -180,16 +177,6 @@ void init_rocket_game (int32_t pos_x, int32_t pos_y, int32_t pos_z, int32_t fuel
 	} else if (r_game.gravity_option == GAME_GRAVITY_NEGATIVE) {
 	}
 
-	r_space.rocket_goal_x = pos_x;		// goal game-space rocket position, in uMeters
-	r_space.rocket_goal_y = pos_y;
-	r_space.rocket_goal_z = pos_z;
-
-	if (GAME_AT_START & mode) {
-		r_space.rocket_x = pos_x;		// preset current game-space rocket position, in uMeters
-		r_space.rocket_y = pos_y;
-		r_space.rocket_z = pos_z;
-	}
-
 	r_space.rocket_delta_x = 0;		// current game-space rocket speed, in uMeters
 	r_space.rocket_delta_y = 0;
 	r_space.rocket_delta_z = 0;
@@ -198,17 +185,29 @@ void init_rocket_game (int32_t pos_x, int32_t pos_y, int32_t pos_z, int32_t fuel
 	r_space.thrust_y = 0;
 	r_space.thrust_z = 0;
 
-	r_game.game_mode = mode;
-
-	// move to the rocket start position
-	compute_rocket_next_position();
-	compute_rocket_cable_lengths();
-	if (GAME_AT_START & mode) {
-		/* use set_rocket_position for motor test bring up */
-		set_rocket_position();
+	if (r_game.game == GAME_XYZ_MOVE) {
+		// continue from where we currently are
 	} else {
-		// Move Rocket to start position
-		move_rocket_position();
+		r_space.rocket_goal_x = pos_x;		// goal game-space rocket position, in uMeters
+		r_space.rocket_goal_y = pos_y;
+		r_space.rocket_goal_z = pos_z;
+
+		if (GAME_AT_START & mode) {
+			r_space.rocket_x = pos_x;		// preset current game-space rocket position, in uMeters
+			r_space.rocket_y = pos_y;
+			r_space.rocket_z = pos_z;
+		}
+
+		// move to the rocket start position
+		compute_rocket_next_position();
+		compute_rocket_cable_lengths();
+		if (GAME_AT_START & mode) {
+			/* use set_rocket_position for motor test bring up */
+			set_rocket_position();
+		} else {
+			// Move Rocket to start position
+			move_rocket_position();
+		}
 	}
 }
 
@@ -321,15 +320,28 @@ void compute_rocket_next_position ()
    #define LENGTH_SQRT_INIT    500 */
 #define LENGTH_SQRT_SCALER   6	/* 2^6 = 64, Scale at 100 uM closely matches stepper 125nM step size */
 
-static void do_compute_cable_length(int32_t tower) {
+static void do_compute_cable_length(int32_t tower,boolean verbose) {
 	int32_t x,y,z;
 
 	// we will use uMeter scaler for the intermedate calculation to avoid overflow
 	// i.e. all numbers must be <= 65535 so that the square does not overflow
-	x=(r_space.rocket_goal_x - r_towers[tower].pos_x + r_towers[tower].mount_pos_x) >> LENGTH_SQRT_SCALER;
-	y=(r_space.rocket_goal_y - r_towers[tower].pos_y + r_towers[tower].mount_pos_y) >> LENGTH_SQRT_SCALER;
-	z=(r_space.rocket_goal_z - r_towers[tower].pos_z + r_towers[tower].mount_pos_z) >> LENGTH_SQRT_SCALER;
+	x=(abs(r_space.rocket_goal_x - r_towers[tower].pos_x) - r_towers[tower].mount_pos_x) >> LENGTH_SQRT_SCALER;
+	y=(abs(r_space.rocket_goal_y - r_towers[tower].pos_y) - r_towers[tower].mount_pos_y) >> LENGTH_SQRT_SCALER;
+	z=(abs(r_space.rocket_goal_z - r_towers[tower].pos_z) - r_towers[tower].mount_pos_z) >> LENGTH_SQRT_SCALER;
 	r_towers[tower].length_goal = sqrt_rocket((x*x)+(y*y)+(z*z)) << LENGTH_SQRT_SCALER;
+
+//	x=(abs(r_space.rocket_goal_x - r_towers[tower].pos_x) - r_towers[tower].mount_pos_x) / 100L;
+//	y=(abs(r_space.rocket_goal_y - r_towers[tower].pos_y) - r_towers[tower].mount_pos_y) / 100L;
+//	z=(abs(r_space.rocket_goal_z - r_towers[tower].pos_z) - r_towers[tower].mount_pos_z) / 100L;
+//	r_towers[tower].length_goal = sqrt_rocket((x*x)+(y*y)+(z*z)) * 100L;
+
+	if (false && verbose) {
+		printf("Tower[%d]:%ld,%ld,%ld\n",tower,x,y,z);
+		printf(" x=%ld-%ld+%ld\n",r_space.rocket_goal_x,r_towers[tower].pos_x,r_towers[tower].mount_pos_x);
+		printf(" y=%ld-%ld+%ld\n",r_space.rocket_goal_y,r_towers[tower].pos_y,r_towers[tower].mount_pos_y);
+		printf(" z=%ld-%ld+%ld\n",r_space.rocket_goal_z,r_towers[tower].pos_z,r_towers[tower].mount_pos_z);
+		printf(" l=%ld\n",r_towers[tower].length_goal);
+	}
 
 	// compute the matching step goal count
 	r_towers[tower].step_goal = micrometers2steps(tower,r_towers[tower].length_goal);
@@ -339,10 +351,18 @@ static void do_compute_cable_length(int32_t tower) {
 
 void compute_rocket_cable_lengths ()
  {
- 	do_compute_cable_length(ROCKET_TOWER_NW);
- 	do_compute_cable_length(ROCKET_TOWER_NE);
- 	do_compute_cable_length(ROCKET_TOWER_SW);
- 	do_compute_cable_length(ROCKET_TOWER_SE);
+ 	do_compute_cable_length(ROCKET_TOWER_NW,false);
+ 	do_compute_cable_length(ROCKET_TOWER_NE,false);
+ 	do_compute_cable_length(ROCKET_TOWER_SW,false);
+ 	do_compute_cable_length(ROCKET_TOWER_SE,false);
+ }
+
+void compute_rocket_cable_lengths_verbose ()
+ {
+ 	do_compute_cable_length(ROCKET_TOWER_NW,true);
+ 	do_compute_cable_length(ROCKET_TOWER_NE,true);
+ 	do_compute_cable_length(ROCKET_TOWER_SW,true);
+ 	do_compute_cable_length(ROCKET_TOWER_SE,true);
  }
 
 /*
@@ -350,8 +370,12 @@ void compute_rocket_cable_lengths ()
  *
  */
 
-static void set_rocket_position ()
+void set_rocket_position ()
  {
+	r_space.rocket_x = r_space.rocket_goal_x;
+	r_space.rocket_y = r_space.rocket_goal_y;
+	r_space.rocket_z = r_space.rocket_goal_z;
+
 	r_towers[ROCKET_TOWER_NW].step_count =  micrometers2steps(ROCKET_TOWER_NW,r_towers[ROCKET_TOWER_NW].length_goal);
 	r_towers[ROCKET_TOWER_NE].step_count =  micrometers2steps(ROCKET_TOWER_NE,r_towers[ROCKET_TOWER_NE].length_goal);
 	r_towers[ROCKET_TOWER_SW].step_count =  micrometers2steps(ROCKET_TOWER_SW,r_towers[ROCKET_TOWER_SW].length_goal);
@@ -361,7 +385,7 @@ static void set_rocket_position ()
 		rocket_position_send();
 		rocket_command_send(ROCKET_MOTOR_CMD_PRESET);
 	}
-	
+
  }
 
 /*
@@ -371,6 +395,10 @@ static void set_rocket_position ()
 
 static void move_rocket_position ()
  {
+	r_space.rocket_x = r_space.rocket_goal_x;
+	r_space.rocket_y = r_space.rocket_goal_y;
+	r_space.rocket_z = r_space.rocket_goal_z;
+
 	r_towers[ROCKET_TOWER_NW].step_count =  micrometers2steps(ROCKET_TOWER_NW,r_towers[ROCKET_TOWER_NW].length_goal);
 	r_towers[ROCKET_TOWER_NE].step_count =  micrometers2steps(ROCKET_TOWER_NE,r_towers[ROCKET_TOWER_NE].length_goal);
 	r_towers[ROCKET_TOWER_SW].step_count =  micrometers2steps(ROCKET_TOWER_SW,r_towers[ROCKET_TOWER_SW].length_goal);
@@ -403,7 +431,7 @@ void move_rocket_next_position ()
 	do_move_tower(&r_towers[ROCKET_TOWER_SW]);
 	do_move_tower(&r_towers[ROCKET_TOWER_SE]);
 
-	if (IO_MOTOR_ENABLE && (GAME_SIMULATE != r_game.game_mode)) {
+	if (IO_MOTOR_ENABLE && (GAME_SIMULATE != r_game.game_mode) && !self_test) {
 		if (r_towers[ROCKET_TOWER_NW].step_diff ||
 		    r_towers[ROCKET_TOWER_NE].step_diff ||
 		    r_towers[ROCKET_TOWER_SW].step_diff ||
@@ -428,7 +456,7 @@ uint8_t query_rocket_progress ()
  {
 	uint8_t buf[10];
 	uint32_t len = 1;
-	
+
 	if (IO_MOTOR_ENABLE) {
 		buf[0] = (uint8_t) 101;
 		i2c_read(i2c,buf,len,ROCKET_MOTOR_I2C_ADDRESS);
@@ -472,25 +500,6 @@ void rocket_increment_send (int32_t increment_nw, int32_t increment_ne, int32_t 
  * rocket_position_send : send the motor positions
  *
  */
-
-static void do_rocket_position_send (uint8_t tower_number, struct ROCKET_TOWER_S *tower)
- {
-	uint8_t buf[10];
-	buf[0]=(uint8_t) tower_number;
-	buf[1]=(uint8_t) ((tower->step_count & 0x00ff000000L) >> 24);
-	buf[2]=(uint8_t) ((tower->step_count & 0x0000ff0000L) >> 16);
-	buf[3]=(uint8_t) ((tower->step_count & 0x000000ff00L) >>  8);
-	buf[4]=(uint8_t) ((tower->step_count & 0x00000000ffL)      );
-	i2c_polling_write (i2c, buf, 5, ROCKET_MOTOR_I2C_ADDRESS);
- }
-
-void x_rocket_position_send ()
-{
-	do_rocket_position_send('1',&r_towers[ROCKET_TOWER_NW]);
-	do_rocket_position_send('2',&r_towers[ROCKET_TOWER_NE]);
-	do_rocket_position_send('3',&r_towers[ROCKET_TOWER_SW]);
-	do_rocket_position_send('4',&r_towers[ROCKET_TOWER_SE]);
-}
 
 void rocket_position_send ()
  {
