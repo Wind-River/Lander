@@ -23,7 +23,12 @@
 #define STATE_BUTTON_HOLD_A  0x0010		// Treat button as on/off instead of toggle 
 #define STATE_BUTTON_HOLD_B  0x0020		// Treat button as on/off instead of toggle 
 #define STATE_FROM_CALLBACK  0x0040		// For usage validation, mark this state directly used by a callback 
-#define STATE_NOT_FOUND      0x0999
+#define STATE_NO_MENU_TEXT   0x0080		// this state does not have menu labels for the buttons
+#define STATE_NOT_FOUND         999
+
+// reverse the button menus if the buttons been reversed on the panel
+// unless this state has STATE_NO_MENU_TEXT set
+#define STATE_REVERSE_MENUS  true
 
 #define ACTION_NOP NULL	// no callback action
 #define STATE_NOP  NULL // no next state
