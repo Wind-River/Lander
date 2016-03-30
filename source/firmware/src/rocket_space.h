@@ -66,7 +66,7 @@
 #define SCALE_GAME_UMETER_TO_MOON_CMETER 10
 
 // Moon Gravity = 1.622 m/s² => 1622 uM/s
-#define GRAVITY_UMETER_PER_SECOND 1622
+#define GRAVITY_UMETER_PER_SECOND 100
 // Safe Lander <= 1.900 m/s => 1900 uM/s
 #define SAFE_UMETER_PER_SECOND 1900
 
@@ -76,7 +76,7 @@
 // Assume  Z full thrust provides 10 millimeter/second
 #define THRUST_UMETER_INC_X  5000/TIME_LOOPS_PER_SECOND
 #define THRUST_UMETER_INC_Y  5000/TIME_LOOPS_PER_SECOND
-#define THRUST_UMETER_INC_Z 10000/(JOYSTICK_Z_MAX-JOYSTICK_Z_MID)
+#define THRUST_UMETER_INC_Z  1000/(JOYSTICK_Z_MAX-JOYSTICK_Z_MID)
 
 // Fuel Units
 // Assume 1 millimeter/second = 1 unit
@@ -163,6 +163,7 @@ struct ROCKET_SPACE_S {
 	int32_t	thrust_y;
 	int32_t	thrust_z;
 
+	int32_t gravity_delta;		// GRAVITY_UMETER_PER_SECOND
 	int32_t	speed_max;			//  minimum usec per step
 };
 
