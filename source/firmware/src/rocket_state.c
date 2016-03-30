@@ -426,7 +426,19 @@ static void S_Calibrate_Circle_Go_enter () {
 			flight_circular(0,CIRCLE_TEST_DEGREES_SECOND*2/FRAMES_PER_SECOND,0, ROCKET_HOME_X+0, ROCKET_HOME_Y+0, ROCKET_HOME_Z+150000L, 360/(CIRCLE_TEST_DEGREES_SECOND/FRAMES_PER_SECOND));
 		} else 	if ('X' == name[0]) {
 			flight_circular(CIRCLE_TEST_DEGREES_SECOND/FRAMES_PER_SECOND,0,0, ROCKET_HOME_X+0,ROCKET_HOME_Y+0,ROCKET_HOME_Z+150000L, 360/(CIRCLE_TEST_DEGREES_SECOND/FRAMES_PER_SECOND));
-		} else 	if ('A' == name[0]) {
+		} else 	if (0 == strcmp("AllLow",name)) {
+			flight_circular(0,
+			                1,
+			                CIRCLE_TEST_DEGREES_SECOND/FRAMES_PER_SECOND,
+			                ROCKET_HOME_X+0, ROCKET_HOME_Y+0, ROCKET_HOME_Z+150000L,
+			                (2*360)/(CIRCLE_TEST_DEGREES_SECOND/FRAMES_PER_SECOND));
+		} else 	if (0 == strcmp("AllMed",name)) {
+			flight_circular((CIRCLE_TEST_DEGREES_SECOND/8)/FRAMES_PER_SECOND,
+			                (CIRCLE_TEST_DEGREES_SECOND/4)/FRAMES_PER_SECOND,
+			                CIRCLE_TEST_DEGREES_SECOND/FRAMES_PER_SECOND,
+			                ROCKET_HOME_X+0, ROCKET_HOME_Y+0, ROCKET_HOME_Z+150000L,
+			                (2*360)/(CIRCLE_TEST_DEGREES_SECOND/FRAMES_PER_SECOND));
+		} else 	if (0 == strcmp("AllHgh",name)) {
 			flight_circular((CIRCLE_TEST_DEGREES_SECOND/4)/FRAMES_PER_SECOND,
 			                (CIRCLE_TEST_DEGREES_SECOND/2)/FRAMES_PER_SECOND,
 			                CIRCLE_TEST_DEGREES_SECOND/FRAMES_PER_SECOND,
@@ -557,19 +569,32 @@ static void S_Main_Menu_enter () {
 	send_NeoPixel(NEOPIXEL_READY);
 }
 
+static uint32_t panic_timer=0L;
+
 static void S_Game_Start_enter () {
 	init_game();
 
+	// init the panic timer
+	panic_timer = task_tick_get_32();
+
+	// start the show
+	send_Sound(SOUND_READY);
+	send_NeoPixel(NEOPIXEL_READY);
+	updateLedDisplays();
+
+	// fly the rocket to game start position
+	flight_linear(r_space.rocket_goal_x,r_space.rocket_goal_y,r_space.rocket_goal_z, MOTOR_SPEED_AUTO);
+	r_flight.state_done="S_Game_Ready";
+	next_state("S_Flight_Linear");
+}
+
+static void S_Game_Ready_enter () {
 	// start the show
 	send_Sound(SOUND_PLAY);
 	send_NeoPixel(NEOPIXEL_PLAY);
 	updateLedDisplays();
 
-	// fly the rocket to game start position
-	flight_linear(r_space.rocket_goal_x,r_space.rocket_goal_y,r_space.rocket_goal_z, MOTOR_SPEED_AUTO);
-	r_flight.state_done="S_Game_Play";
-	// go fly at next frame
-	next_state("S_Flight_Linear");
+	next_state("S_Game_Play");
 }
 
 static void S_Game_Play_loop () {
@@ -619,12 +644,12 @@ static void S_Game_Play_loop () {
 		display_state();
 	} else {
 		sprintf(buffer,"Z=%02d X=%03d Y=%03d",
-			r_space.rocket_z/SCALE_GAME_UMETER_TO_MOON_CMETER,
-			r_space.rocket_x/SCALE_GAME_UMETER_TO_MOON_CMETER,
-			r_space.rocket_y/SCALE_GAME_UMETER_TO_MOON_CMETER
+			r_space.rocket_z/1000 /*SCALE_GAME_UMETER_TO_MOON_CMETER*/,
+			r_space.rocket_x/1000 /*SCALE_GAME_UMETER_TO_MOON_CMETER*/,
+			r_space.rocket_y/1000 /*SCALE_GAME_UMETER_TO_MOON_CMETER*/
 			);
 		set_lcd_display(LCD_BUFFER_1,buffer);
-		sprintf(buffer,"S=%04d F=%04d",r_space.rocket_delta_z,r_space.rocket_fuel);
+		sprintf(buffer,"S=%05d F=%04d",r_space.rocket_delta_z,r_space.rocket_fuel);
 		set_lcd_display(LCD_BUFFER_2,buffer);
 		display_state();
 	}
@@ -646,6 +671,29 @@ static void S_Game_Done_enter () {
 		send_NeoPixel(NEOPIXEL_LAND);
 	}
 	set_lcd_display(LCD_BUFFER_1,buffer);
+}
+
+static void S_Game_Panic_enter () {
+	uint32_t panic_timer_now = task_tick_get_32();
+	if ((5L * sys_clock_ticks_per_sec) > (panic_timer_now - panic_timer)) {
+		// double panic < 5 seconds means stop game
+		next_state("S_Game_Stop");
+	} else {
+		// reset the panic timer
+		panic_timer = panic_timer_now;
+
+		// cancel all motion
+		r_space.rocket_delta_x = 0;
+		r_space.rocket_delta_y = 0;
+		r_space.rocket_delta_z = 0;
+
+		// jump-fly the rocket up 10 cm
+		r_space.rocket_goal_z += 100000L;
+		if (r_space.rocket_goal_z > GAME_Z_POS_MAX) r_space.rocket_goal_z = GAME_Z_POS_MAX;
+		flight_linear(r_space.rocket_goal_x,r_space.rocket_goal_y,r_space.rocket_goal_z, MOTOR_SPEED_AUTO);
+		r_flight.state_done="S_Game_Play";
+		next_state("S_Flight_Linear");
+	}
 }
 
 static void S_Game_Display_Next_enter () {
@@ -1091,7 +1139,7 @@ static void S_TestMotor_Minus360_enter () {
 
 /**** TEST CABLE CALCULATIONS ********************************************************/
 
-void cable_calc_test(char *msg, int32_t x, int32_t y) {
+static void cable_calc_test(char *msg, int32_t x, int32_t y) {
 	int32_t i;
 
 	for (i=Z_POS_MAX;i>=0;i-=Z_POS_MAX/4) {
@@ -1114,7 +1162,7 @@ void cable_calc_test(char *msg, int32_t x, int32_t y) {
 	}
 }
 
-void cable_steps_start(int32_t x, int32_t y, int32_t z) {
+static void cable_steps_start(int32_t x, int32_t y, int32_t z) {
 	r_space.rocket_x = x;
 	r_space.rocket_y = y;
 	r_space.rocket_z = z;
@@ -1126,7 +1174,7 @@ void cable_steps_start(int32_t x, int32_t y, int32_t z) {
 	move_rocket_next_position();
 }
 
-void cable_step_pos(char* msg,int32_t x, int32_t y, int32_t z) {
+static void cable_step_pos(char* msg,int32_t x, int32_t y, int32_t z) {
 	r_space.rocket_x = x;
 	r_space.rocket_y = y;
 	r_space.rocket_z = z;
@@ -1149,7 +1197,7 @@ void cable_step_pos(char* msg,int32_t x, int32_t y, int32_t z) {
 		);
 }
 
-void cable_steps_move(int32_t x, int32_t y, int32_t z) {
+static void cable_steps_move(int32_t x, int32_t y, int32_t z) {
 	r_space.rocket_goal_x = x;
 	r_space.rocket_goal_y = y;
 	r_space.rocket_goal_z = z;
@@ -1169,12 +1217,17 @@ void cable_steps_move(int32_t x, int32_t y, int32_t z) {
 	move_rocket_next_position();
 }
 
-void rotation_test(int32_t ax, int32_t ay, int32_t az) {
+static void rotation_test(int32_t ax, int32_t ay, int32_t az) {
 	r_flight.current_ax = ax; r_flight.current_ay = ay; r_flight.current_az = az;
 	flight_circular_loop();
 	PRINT("CIRCLE(%3d,%3d,%3d)=>(%8d,%8d,%8d) \n",
 		ax, ay, az,
 		r_space.rocket_goal_x,r_space.rocket_goal_y,r_space.rocket_goal_z);
+}
+
+static void all_rotation_test (int16_t x_degrees,int16_t y_degrees,int16_t z_degrees) {
+	rigid_rotation_compute (x_degrees,y_degrees,z_degrees,ROCKET_HOME_X+100000L,ROCKET_HOME_Y+0,ROCKET_HOME_Z+150000L);
+	printf("ROT(%d,%d,%d) => %ld,%ld,%ld\n",x_degrees,y_degrees,z_degrees,r_flight.current_x,r_flight.current_y,r_flight.current_z);
 }
 
 /**** TEST STATE SANITY ********************************************************/
@@ -1190,6 +1243,27 @@ static void S_Test_Sanity_Base_enter () {
 		micro2millimeter(r_towers[ROCKET_TOWER_SW].length), r_towers[ROCKET_TOWER_SW].step_count,
 		micro2millimeter(r_towers[ROCKET_TOWER_SE].length), r_towers[ROCKET_TOWER_SE].step_count
 		);
+
+
+	PRINT("\n=== All Rotation test ===\n");
+	flight_circular((CIRCLE_TEST_DEGREES_SECOND/4)/FRAMES_PER_SECOND,
+					(CIRCLE_TEST_DEGREES_SECOND/2)/FRAMES_PER_SECOND,
+					CIRCLE_TEST_DEGREES_SECOND/FRAMES_PER_SECOND,
+					ROCKET_HOME_X+0, ROCKET_HOME_Y+0, ROCKET_HOME_Z+150000L,
+					(2*360)/(CIRCLE_TEST_DEGREES_SECOND/FRAMES_PER_SECOND));
+	all_rotation_test (0,0,     0);
+	all_rotation_test (0,0,    45);
+	all_rotation_test (0,0,180   );
+	all_rotation_test (0,0,180+45);
+	all_rotation_test (0,    45,0);
+	all_rotation_test (0,180   ,0);
+	all_rotation_test (0,180+45,0);
+	all_rotation_test ( 45,  0, 45);
+	all_rotation_test ( 90,  0, 90);
+	all_rotation_test ( 45,  0, 90);
+	all_rotation_test ( 45,  0, 90);
+	all_rotation_test ( 45, 45, 45);
+	PRINT("\n=========================\n");
 
 	self_test=false;
 }
@@ -1497,8 +1571,12 @@ void state_callback(char *call_name) {
 
 	} else if (0 == strcmp("S_Game_Start_enter",call_name)) {
 		if (!self_test) S_Game_Start_enter();
+	} else if (0 == strcmp("S_Game_Ready_enter",call_name)) {
+		if (!self_test) S_Game_Ready_enter();
 	} else if (0 == strcmp("S_Game_Play_loop",call_name)) {
 		if (!self_test) S_Game_Play_loop();
+	} else if (0 == strcmp("S_Game_Panic_enter",call_name)) {
+		if (!self_test) S_Game_Panic_enter();
 	} else if (0 == strcmp("S_Game_Done_enter",call_name)) {
 		if (!self_test) S_Game_Done_enter();
 	} else if (0 == strcmp("S_Game_Display_Next_enter",call_name)) {
@@ -1646,7 +1724,7 @@ void init_state () {
 
 	StateGuiAdd("S_Init",
 	 STATE_FROM_CALLBACK,
-	 " Intel Lander! ",
+	 " Rocket Lander! ",
 //	 "1234567890123456",
 	 "I/O_Test   Start",
 	 "S_IO_STATE","S_Start",
@@ -1713,11 +1791,18 @@ void init_state () {
 		 "S_Game_Done",STATE_NOP,
 		 "S_Game_Start_enter",ACTION_NOP,ACTION_NOP);
 
+		StateGuiAdd("S_Game_Ready",
+		 STATE_FROM_CALLBACK,
+		 "",
+		 "",
+		 STATE_NOP,STATE_NOP,
+		 "S_Game_Ready_enter",ACTION_NOP,ACTION_NOP);
+
 		StateGuiAdd("S_Game_Play",
 		 STATE_NO_VERBOSE|STATE_FROM_CALLBACK|STATE_NO_MENU_TEXT,
 		 "",
 		 "",
-		 "S_Game_Stop","S_Game_Display_Next",
+		 "S_Game_Panic","S_Game_Display_Next",
 		 STATE_NOP,"S_Game_Play_loop",ACTION_NOP);
 
 			StateGuiAdd("S_Game_Display_Next",
@@ -1734,6 +1819,13 @@ void init_state () {
 		 "Main      Replay",
 		 "S_Main_Menu","S_Game_Start",
 		 "S_Game_Done_enter",ACTION_NOP,ACTION_NOP);
+
+		StateGuiAdd("S_Game_Panic",
+		 STATE_NO_VERBOSE|STATE_NO_MENU_TEXT,
+		 "",
+		 "",
+         STATE_NOP,STATE_NOP,
+		 "S_Game_Panic_enter",ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Game_Stop",
 		 STATE_NO_FLAGS,
