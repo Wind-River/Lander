@@ -22,7 +22,7 @@ typedef char boolean;
 
 // General Enablement
 
-#define IO_BUTTON_BRINGUP			true	// init state to display I/O button and slider values
+#define IO_BUTTON_BRINGUP			false	// init state to display I/O button and slider values
 
 #define IO_BUTTONS_ENABLE			true	// enable the buttons to change state
 #define IO_JOYSTICK_ENABLE			true	// enable the joystick for X-Y
@@ -41,7 +41,7 @@ typedef char boolean;
 
 // Debugging
 #define DEBUG_TIMING_ENABLE			true	// enable the timing measurements for QOS
-#define DEBUG_GAME_AT_START			true	// for game play testing, assume rocket already at start position
+#define DEBUG_GAME_AT_START			false	// for game play testing, assume rocket already at start position
 
 // Specific installed hardware
 #define IO_GROVE_JOYSTICK_ENABLE true
