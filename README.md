@@ -15,3 +15,7 @@ We will present a physical interactive model of the famous LEM Lander game, wher
  * AC power for a power strip connection
  * An internet connection (for Helix Application Cloud)
  * W=36”, D=24”, H=24” (24” square play field together with a laptop to run and show Helix)
+
+# CAD and STL
+ * All STL files are located in the /cad directory
+ * CAD drawings for the Lander are available at - https://cad.onshape.com/documents/7df8b4dcfbc827b905a6e076
