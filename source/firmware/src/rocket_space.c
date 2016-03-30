@@ -50,7 +50,6 @@
 
 void rocket_position_send();
 void rocket_command_send(uint8_t command);
-static void move_rocket_position();
 void set_rocket_position();
 
 /*
@@ -172,9 +171,13 @@ void init_rocket_game (int32_t pos_x, int32_t pos_y, int32_t pos_z, int32_t fuel
 	// TODO ###################
 	r_game.gravity_option=gravity;
 	if        (r_game.gravity_option == GAME_GRAVITY_NORMAL) {
+		r_space.gravity_delta = GRAVITY_UMETER_PER_SECOND;
 	} else if (r_game.gravity_option == GAME_GRAVITY_HIGH) {
+		r_space.gravity_delta = GRAVITY_UMETER_PER_SECOND * 2L;
 	} else if (r_game.gravity_option == GAME_GRAVITY_NONE) {
+		r_space.gravity_delta = 0;
 	} else if (r_game.gravity_option == GAME_GRAVITY_NEGATIVE) {
+		r_space.gravity_delta = -(GRAVITY_UMETER_PER_SECOND/2);
 	}
 
 	r_space.rocket_delta_x = 0;		// current game-space rocket speed, in uMeters
@@ -196,17 +199,6 @@ void init_rocket_game (int32_t pos_x, int32_t pos_y, int32_t pos_z, int32_t fuel
 			r_space.rocket_x = pos_x;		// preset current game-space rocket position, in uMeters
 			r_space.rocket_y = pos_y;
 			r_space.rocket_z = pos_z;
-		}
-
-		// move to the rocket start position
-		compute_rocket_next_position();
-		compute_rocket_cable_lengths();
-		if (GAME_AT_START & mode) {
-			/* use set_rocket_position for motor test bring up */
-			set_rocket_position();
-		} else {
-			// Move Rocket to start position
-			move_rocket_position();
 		}
 	}
 }
@@ -239,22 +231,22 @@ void compute_rocket_next_position ()
 		// Thruster X is 'on-left or 'on-right' or 'off'
 		r_space.thrust_x = r_control.analog_x - JOYSTICK_X_MID;
 		if (r_space.thrust_x < -JOYSTICK_DELTA_XY_MIN) {
-			r_space.rocket_delta_x = -rocket_thrust_inc_x;
+			r_space.rocket_delta_x -= rocket_thrust_inc_x;
 			rocket_fuel_used += FUEL_X_INC;
 		}
 		if (r_space.thrust_x > JOYSTICK_DELTA_XY_MIN ) {
-			r_space.rocket_delta_x = rocket_thrust_inc_x;
+			r_space.rocket_delta_x += rocket_thrust_inc_x;
 			rocket_fuel_used += FUEL_X_INC;
 		}
 
 		// Thruster Y is 'on-forward or 'on-backward' or 'off'
 		r_space.thrust_y = r_control.analog_y - JOYSTICK_Y_MID;
 		if (r_space.thrust_y < -JOYSTICK_DELTA_XY_MIN) {
-			r_space.rocket_delta_y = -rocket_thrust_inc_y;
+			r_space.rocket_delta_y -= rocket_thrust_inc_y;
 			rocket_fuel_used += FUEL_Y_INC;
 		}
 		if (r_space.thrust_y > JOYSTICK_DELTA_XY_MIN ) {
-			r_space.rocket_delta_y = rocket_thrust_inc_y;
+			r_space.rocket_delta_y += rocket_thrust_inc_y;
 			rocket_fuel_used += FUEL_Y_INC;
 		}
 
@@ -276,8 +268,9 @@ void compute_rocket_next_position ()
 
 	if (GAME_XYZ_MOVE != r_game.game) {
 		// Acceleration due to gravity
+		if (r_space.rocket_delta_z) printf("Z=%d,x%d\n",r_space.rocket_delta_z,r_space.thrust_z);
 		if (GAME_GRAVITY_NONE != r_game.gravity_option) {
-			r_space.rocket_delta_z -= GRAVITY_UMETER_PER_SECOND;
+			r_space.rocket_delta_z -= r_space.gravity_delta;
 		}
 	} else {
 		// Cancel any inertial and gravity motion, also any fuel usage
@@ -393,6 +386,8 @@ void set_rocket_position ()
  *
  */
 
+
+#ifdef FUNCTION_SHOW_DEPRECATED	// deprecated in fovor of more valid 'flight' function
 static void move_rocket_position ()
  {
 	r_space.rocket_x = r_space.rocket_goal_x;
@@ -409,6 +404,7 @@ static void move_rocket_position ()
 		rocket_command_send(ROCKET_MOTOR_CMD_DEST);
 	}
  }
+ #endif
 
 /*
  * move_rocket_next_position : incrementally move the Rocket position
