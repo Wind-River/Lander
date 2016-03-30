@@ -440,8 +440,8 @@ void init_main() {
 	} else {
 	    r_game.game = GAME_XYZ_LAND;
 	}
-    r_game.fuel_option = GAME_FUEL_NORMAL;
-    r_game.gravity_option = GAME_GRAVITY_NONE;
+    r_game.fuel_option = GAME_FUEL_NOLIMIT /*GAME_FUEL_NORMAL*/;
+    r_game.gravity_option = GAME_GRAVITY_NONE /* GAME_GRAVITY_NORMAL */;
     r_game.start_option = GAME_START_CENTER;
 
 	// set initial game controls
@@ -524,7 +524,7 @@ void main() {
 	if (IO_BUTTON_BRINGUP) {
 		goto_state("S_Init");
 	} else {
-		goto_state("S_Main_Play");
+		goto_state("S_Start");
 	}
 
     while (1)
