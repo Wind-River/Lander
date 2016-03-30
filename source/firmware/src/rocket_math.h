@@ -94,3 +94,5 @@ void flight_circular_loop();
 
 void flight_wait(int32_t frame_count);
 void flight_wait_loop();
+
+void rigid_rotation_compute (int16_t x_degrees,int16_t y_degrees,int16_t z_degrees,int32_t start_x,int32_t start_y,int32_t start_z);
