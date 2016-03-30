@@ -396,8 +396,10 @@ void compass_select(uint8_t command, struct CompassRec *compass) {
 			compass->z=ROCKET_HOME_Z+0L;
 		}
 	} else if (COMPASS_CALC_CIRC ==  command) {
-		if        ((x_delta < 0) && (y_delta > 0)) {
-			compass->name = "      ";
+		if        ((x_delta == 0) && (y_delta == 0)) {
+			compass->name = "Home  ";
+		} else if ((x_delta < 0) && (y_delta > 0)) {
+			compass->name = "AllHgh";
 		} else if ((x_delta == 0) && (y_delta > 0)) {
 			compass->name = "Z_Circ";
 		} else if ((x_delta > 0) && (y_delta > 0)) {
@@ -409,11 +411,9 @@ void compass_select(uint8_t command, struct CompassRec *compass) {
 		} else if ((x_delta == 0) && (y_delta < 0)) {
 			compass->name = "X_Circ";
 		} else if ((x_delta < 0) && (y_delta < 0)) {
-			compass->name = "      ";
+			compass->name = "AllMed";
 		} else if ((x_delta < 0) && (y_delta == 0)) {
-			compass->name = "All   ";
-		} else if ((x_delta == 0) && (y_delta == 0)) {
-			compass->name = "Home  ";
+			compass->name = "AllLow";
 		}
 	} else {
 		if        ((x_delta < 0) && (y_delta > 0)) {
@@ -766,6 +766,49 @@ void flight_wait_loop () {
 	r_flight.frame_count++;
 }
 
+/*
+ * rigid rotation math
+ *
+ */
+
+void rigid_rotation_compute (int16_t x_degrees,int16_t y_degrees,int16_t z_degrees,int32_t start_x,int32_t start_y,int32_t start_z) {
+	double rotation_matrix[3][3];
+
+	// convert initial position to double in 1/10 mm
+	double x = (double) ((start_x - r_flight.center_x)/100L);
+	double y = (double) ((start_y - r_flight.center_y)/100L);
+	double z = (double) ((start_z - r_flight.center_z)/100L);
+
+	// tait_brian rigid rotation matrix computation, rotating z then y then x
+	double s0 = degrees2sine(z_degrees), c0 = degrees2cosine(z_degrees);
+	double s1 = degrees2sine(y_degrees), c1 = degrees2cosine(y_degrees);
+	double s2 = degrees2sine(x_degrees), c2 = degrees2cosine(x_degrees);
+	rotation_matrix[0][0] =  c0 * c1;
+	rotation_matrix[0][1] =  s0 * c1;
+	rotation_matrix[0][2] = -s1;
+	rotation_matrix[1][0] = -s0 * c2 + c0 * s1 * s2;
+	rotation_matrix[1][1] =  c0 * c2 + s0 * s1 * s2;
+	rotation_matrix[1][2] =  c1 * s2;
+	rotation_matrix[2][0] =  s0 * s2 + c0 * s1 * c2;
+	rotation_matrix[2][1] = -c0 * s2 + s0 * s1 * c2;
+	rotation_matrix[2][2] =  c1 * c2;
+
+	// compute next location
+	x = (rotation_matrix[0][0] * x) + (rotation_matrix[0][1] * y) + (rotation_matrix[0][2] * z);
+	y = (rotation_matrix[1][0] * x) + (rotation_matrix[1][1] * y) + (rotation_matrix[1][2] * z);
+	z = (rotation_matrix[2][0] * x) + (rotation_matrix[2][1] * y) + (rotation_matrix[2][2] * z);
+
+	// convert to integer um coordinates around center
+	r_flight.current_x = (((int32_t) x + 0.5) * 100L) + r_flight.center_x;
+	r_flight.current_y = (((int32_t) y + 0.5) * 100L) + r_flight.center_y;
+	r_flight.current_z = (((int32_t) z + 0.5) * 100L) + r_flight.center_z;
+}
+
+/*
+ * flight_circular
+ *
+ */
+
 void flight_circular (int32_t ax,int32_t ay,int32_t az, int32_t center_x, int32_t center_y, int32_t center_z, int32_t frame_count) {
 	flight_init();
 
@@ -823,18 +866,18 @@ void flight_circular_loop () {
 		// simple rotate on y-axis
 		x = degrees2cosine(r_flight.current_ay);
 		z = degrees2sine(  r_flight.current_ay);
-		r_flight.current_x = ((int32_t) (x * r_flight.radius)) + r_flight.center_x; ;
-		r_flight.current_z = ((int32_t) (z * r_flight.radius)) + r_flight.center_z; ;
+		r_flight.current_x = ((int32_t) (x * r_flight.radius)) + r_flight.center_x;
+		r_flight.current_z = ((int32_t) (z * r_flight.radius)) + r_flight.center_z;
 		// Y is unchanged
 	} else if ((0 == r_flight.current_az) && (0 == r_flight.current_ay)) {
 		// simple rotate on x-axis
 		y = degrees2cosine(r_flight.current_ax);
 		z = degrees2sine(  r_flight.current_ax);
-		r_flight.current_y = ((int32_t) (y * r_flight.radius)) + r_flight.center_y; ;
-		r_flight.current_z = ((int32_t) (z * r_flight.radius)) + r_flight.center_z; ;
+		r_flight.current_y = ((int32_t) (y * r_flight.radius)) + r_flight.center_y;
+		r_flight.current_z = ((int32_t) (z * r_flight.radius)) + r_flight.center_z;
 		// X is unchanged
 	} else {
-		// complex tait_brian rotation
+		rigid_rotation_compute (r_flight.current_ax,r_flight.current_ay,r_flight.current_az,ROCKET_HOME_X+100000L,ROCKET_HOME_Y+0,ROCKET_HOME_Z+150000L);
 	}
 
 	// send the coordinates to the rocket
@@ -846,4 +889,3 @@ void flight_circular_loop () {
 		move_rocket_next_position();
 	}
 }
-
