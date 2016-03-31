@@ -565,8 +565,8 @@ static void updateLedDisplays () {
 }
 
 static void S_Main_Menu_enter () {
-	send_Sound(SOUND_READY);
-	send_NeoPixel(NEOPIXEL_READY);
+	send_Sound(SOUND_ATTRACT);
+	send_NeoPixel(NEOPIXEL_ATTRACT);
 }
 
 static uint32_t panic_timer=0L;
@@ -578,8 +578,8 @@ static void S_Game_Start_enter () {
 	panic_timer = task_tick_get_32();
 
 	// start the show
-	send_Sound(SOUND_READY);
-	send_NeoPixel(NEOPIXEL_READY);
+	send_Sound(SOUND_GET_READY);
+	send_NeoPixel(NEOPIXEL_GET_READY);
 	updateLedDisplays();
 
 	// fly the rocket to game start position
@@ -1507,19 +1507,9 @@ static void S_Test_Sanity_Tables_enter () {
 
 void S_Shutdown_enter () {
 	/* move the rocket to the default home position, for power off */
-	init_rocket_game(ROCKET_HOME_X, ROCKET_HOME_Y, ROCKET_HOME_Z, GAME_FUEL_NOLIMIT, GAME_GRAVITY_NONE, GAME_PLAY);
-}
-
-void S_Shutdown_loop () {
-	uint8_t position_status;
-
-	position_status = query_rocket_progress();
-	sprintf(state_array[state_now].display_1,"Progress=%4d",position_status);
-	display_state();
-	if (100 == position_status) {
-		// we are done moving
-		goto_state("S_Shutdown_Done");
-	}
+	flight_linear(ROCKET_HOME_X, ROCKET_HOME_Y, ROCKET_HOME_Z, MOTOR_SPEED_AUTO);
+	r_flight.state_done="S_Shutdown_Done";
+	next_state("S_Flight_Linear");
 }
 
 
@@ -1699,8 +1689,6 @@ void state_callback(char *call_name) {
 
 	} else if (0 == strcmp("S_Shutdown_enter",call_name)) {
 		if (!self_test) S_Shutdown_enter();
-	} else if (0 == strcmp("S_Shutdown_loop",call_name)) {
-		if (!self_test) S_Shutdown_loop();
 
 	} else log_val("ERROR: MISSING_CALLBACK='%s'\n",call_name);
 
@@ -1864,7 +1852,7 @@ void init_state () {
 	//	 "1234567890123456",
 		 "Cancel          ",
 		"S_Shutdown_Done", STATE_NOP,
-		 "S_Shutdown_enter","S_Shutdown_loop",ACTION_NOP);
+		 "S_Shutdown_enter",ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Shutdown_Done",
 		 STATE_FROM_CALLBACK,
