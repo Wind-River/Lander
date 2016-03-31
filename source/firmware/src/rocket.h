@@ -31,7 +31,7 @@ typedef char boolean;
 #define IO_TRACKER_LOCAL_ENABLE		true	// enable the Pan&Tilt 'antenae' device
 #define IO_MOTOR_ENABLE				true	// enable the motors
 
-#define IO_REMOTE_ENABLE			false	// enable the sister i2c-slave board
+#define IO_REMOTE_ENABLE			true	// enable the sister i2c-slave board
 											// NOTE: the connection and remote board must be up else we will hang in "setup.c"
 #define IO_LEDS_REMOTE_ENABLE		true	// enable the remote LED space lighting
 #define IO_NEO_REMOTE_ENABLE		true	// enable the remote NeoPixels space lighting
@@ -125,22 +125,24 @@ typedef char boolean;
 #endif
 
 /* Sound Setup */
-#define SOUND_QUIET  0
-#define SOUND_READY  1
-#define SOUND_PLAY   2
-#define SOUND_DANGER 3
-#define SOUND_LAND   4
-#define SOUND_CRASH  5
-#define SOUND_MAX    6
+#define SOUND_QUIET  	0
+#define SOUND_GET_READY 1
+#define SOUND_PLAY  	2
+#define SOUND_DANGER 	3
+#define SOUND_LAND   	4
+#define SOUND_CRASH 	5
+#define SOUND_ATTRACT	6
+#define SOUND_MAX   	7
 
 /* NeoPixel Setup */
-#define NEOPIXEL_QUIET  0
-#define NEOPIXEL_READY  1
-#define NEOPIXEL_PLAY   2
-#define NEOPIXEL_DANGER 3
-#define NEOPIXEL_LAND   4
-#define NEOPIXEL_CRASH  5
-#define NEOPIXEL_MAX    6
+#define NEOPIXEL_QUIET  	0
+#define NEOPIXEL_GET_READY  1
+#define NEOPIXEL_PLAY   	2
+#define NEOPIXEL_DANGER 	3
+#define NEOPIXEL_LAND   	4
+#define NEOPIXEL_CRASH  	5
+#define NEOPIXEL_ATTRACT  	6
+#define NEOPIXEL_MAX    	7
 
 
 /* ADC Setup */
