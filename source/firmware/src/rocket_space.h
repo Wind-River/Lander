@@ -32,12 +32,14 @@
 
 // Dimensions of game play space, in uMeters, referenced from game center
 // Assume 10mm from top, 50 mm from sides
-#define GAME_X_POS_MIN (X_POS_MIN + 50000L)	// in uMeters ...
-#define GAME_X_POS_MAX (X_POS_MAX - 50000L)
-#define GAME_Y_POS_MIN (Y_POS_MIN + 50000L)
-#define GAME_Y_POS_MAX (Y_POS_MAX - 50000L)
+#define GAME_XY_MARGIN 50000L
+#define GAME_Z_MARGIN 100000L
+#define GAME_X_POS_MIN (X_POS_MIN + GAME_XY_MARGIN)	// in uMeters ...
+#define GAME_X_POS_MAX (X_POS_MAX - GAME_XY_MARGIN)
+#define GAME_Y_POS_MIN (Y_POS_MIN + GAME_XY_MARGIN)
+#define GAME_Y_POS_MAX (Y_POS_MAX - GAME_XY_MARGIN)
 #define GAME_Z_POS_MIN  Z_POS_MIN
-#define GAME_Z_POS_MAX (Z_POS_MAX - 70000L)
+#define GAME_Z_POS_MAX (Z_POS_MAX - GAME_Z_MARGIN)
 
 // Dimensions of game rocket, in uMeters, referenced from rocket center
 // rocket mount is X:50 mm x Y:30 mm x Z:25 mm high
@@ -66,7 +68,7 @@
 #define SCALE_GAME_UMETER_TO_MOON_CMETER 10
 
 // Moon Gravity = 1.622 m/s² => 1622 uM/s
-#define GRAVITY_UMETER_PER_SECOND 100
+#define GRAVITY_UMETER_PER_SECOND 200
 // Safe Lander <= 1.900 m/s => 1900 uM/s
 #define SAFE_UMETER_PER_SECOND 1900
 
@@ -76,7 +78,7 @@
 // Assume  Z full thrust provides 10 millimeter/second
 #define THRUST_UMETER_INC_X  5000/TIME_LOOPS_PER_SECOND
 #define THRUST_UMETER_INC_Y  5000/TIME_LOOPS_PER_SECOND
-#define THRUST_UMETER_INC_Z  1000/(JOYSTICK_Z_MAX-JOYSTICK_Z_MID)
+#define THRUST_UMETER_INC_Z  2000/(JOYSTICK_Z_MAX-JOYSTICK_Z_MID)
 
 // Fuel Units
 // Assume 1 millimeter/second = 1 unit
