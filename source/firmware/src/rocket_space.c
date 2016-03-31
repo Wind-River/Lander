@@ -285,21 +285,30 @@ void compute_rocket_next_position ()
 		if (r_space.rocket_fuel < 100) r_space.rocket_fuel = FUEL_SUPPLY_INIT;
 	}
 
-	// Assert Limits
-	if (GAME_SIMULATE == r_game.game_mode) {
-		if (r_space.rocket_goal_x < X_POS_MIN)  r_space.rocket_goal_x = X_POS_MIN;
-		if (r_space.rocket_goal_x > X_POS_MAX)  r_space.rocket_goal_x = X_POS_MAX;
-		if (r_space.rocket_goal_y < Y_POS_MIN)  r_space.rocket_goal_y = Y_POS_MIN;
-		if (r_space.rocket_goal_y > Y_POS_MAX)  r_space.rocket_goal_y = Y_POS_MAX;
-		if (r_space.rocket_goal_z < Z_POS_MIN)  r_space.rocket_goal_z = Z_POS_MIN;
-		if (r_space.rocket_goal_z > Z_POS_MAX)  r_space.rocket_goal_z = Z_POS_MAX;
-	} else {
-		if (r_space.rocket_goal_x < GAME_X_POS_MIN)  r_space.rocket_goal_x = GAME_X_POS_MIN;
-		if (r_space.rocket_goal_x > GAME_X_POS_MAX)  r_space.rocket_goal_x = GAME_X_POS_MAX;
-		if (r_space.rocket_goal_y < GAME_Y_POS_MIN)  r_space.rocket_goal_y = GAME_Y_POS_MIN;
-		if (r_space.rocket_goal_y > GAME_Y_POS_MAX)  r_space.rocket_goal_y = GAME_Y_POS_MAX;
-		if (r_space.rocket_goal_z < GAME_Z_POS_MIN)  r_space.rocket_goal_z = GAME_Z_POS_MIN;
-		if (r_space.rocket_goal_z > GAME_Z_POS_MAX)  r_space.rocket_goal_z = GAME_Z_POS_MAX;
+	// Assert Limits: bounce off of X-Y edges, cancel movement above gamespace
+	if (r_space.rocket_goal_x < GAME_X_POS_MIN)  {
+		r_space.rocket_goal_x = GAME_X_POS_MIN;
+		if (r_space.rocket_delta_x < 0) r_space.rocket_delta_x = -r_space.rocket_delta_x;
+	}
+	if (r_space.rocket_goal_x > GAME_X_POS_MAX)  {
+		r_space.rocket_goal_x = GAME_X_POS_MAX;
+		if (r_space.rocket_delta_x > 0) r_space.rocket_delta_x = -r_space.rocket_delta_x;
+	}
+	if (r_space.rocket_goal_y < GAME_Y_POS_MIN)  {
+		r_space.rocket_goal_y = GAME_Y_POS_MIN;
+		if (r_space.rocket_delta_y < 0) r_space.rocket_delta_y = -r_space.rocket_delta_y;
+	}
+	if (r_space.rocket_goal_y > GAME_Y_POS_MAX)  {
+		r_space.rocket_goal_y = GAME_Y_POS_MAX;
+		if (r_space.rocket_delta_y > 0) r_space.rocket_delta_y = -r_space.rocket_delta_y;
+	}
+	if (r_space.rocket_goal_z < GAME_Z_POS_MIN)  {
+		r_space.rocket_goal_z = GAME_Z_POS_MIN;
+		// keep the speed for game results
+	}
+	if (r_space.rocket_goal_z > GAME_Z_POS_MAX)  {
+		r_space.rocket_goal_z = GAME_Z_POS_MAX;
+		if (r_space.rocket_delta_z > 0) r_space.rocket_delta_z = 0;
 	}
  }
 
