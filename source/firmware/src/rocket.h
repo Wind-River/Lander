@@ -43,10 +43,10 @@ typedef char boolean;
 #define DEBUG_TIMING_ENABLE			true	// enable the timing measurements for QOS
 #define DEBUG_GAME_AT_START			false	// for game play testing, assume rocket already at start position
 
-// Specific installed hardware
-#define IO_GROVE_JOYSTICK_ENABLE true
-#define IO_GROVE_JOYSTICK_TOGGLE true
-#define IO_ADAFRUIT_JOYSTICK_ENABLE false
+// Specific installed joystick hardware
+#define IO_GROVE_JOYSTICK_ENABLE 	true	// enable the Grove thumb-joystick on the A0/A1 port
+#define IO_GROVE_JOYSTICK_TOGGLE 	true	// enable the Grove thumb-joystick in toggle mode (current default implementation)
+#define IO_ADAFRUIT_JOYSTICK_ENABLE false	// enable the Adafruit Arcade-style toggle-joystick
 
 // Time Controls
 
@@ -103,26 +103,39 @@ typedef char boolean;
 /* LCD Data */
 #define LCD_DISPLAY_POS_MAX 16
 
-/* Joystick Data */
-#ifdef IO_GROVE_JOYSTICK_ENABLE
-
+/* Joystick Configure */
+#ifdef IO_GROVE_JOYSTICK_ENABLE	// Grove X-Y reostats
 #define JOYSTICK_X_PORT 0
 #define JOYSTICK_Y_PORT 1
-#define JOYSTICK_Z_PORT 2
-
 #define JOYSTICK_X_MIN 200
 #define JOYSTICK_X_MID 413
 #define JOYSTICK_X_MAX 650
 #define JOYSTICK_Y_MIN 200
 #define JOYSTICK_Y_MID 413
 #define JOYSTICK_Y_MAX 650
+#define JOYSTICK_DELTA_XY_MIN 40	// no move at center value zone
+#endif
+#ifdef IO_ADAFRUIT_JOYSTICK_ENABLE // Adafruit arcade X-Y toggle switches
+#define JOYSTICK_X_PORT 0
+#define JOYSTICK_Y_PORT 1
+#define JOYSTICK_X_MIN 200
+#define JOYSTICK_X_MID 413
+#define JOYSTICK_X_MAX 650
+#define JOYSTICK_Y_MIN 200
+#define JOYSTICK_Y_MID 413
+#define JOYSTICK_Y_MAX 650
+#define JOYSTICK_HIGH_MIN 	500		// the high toggle is > 2/3
+#define JOYSTICK_LOW_MIN 	200		// the high toggle is > 1/3 (else off)
+#define JOYSTICK_DELTA_XY_MIN 40	// no move at center value zone
+#endif
+
+/* Slider Configure */
+#define JOYSTICK_Z_PORT 2
 #define JOYSTICK_Z_MIN 0
 #define JOYSTICK_Z_MID 422
 #define JOYSTICK_Z_MAX 1023
-
-#define JOYSTICK_DELTA_XY_MIN 40	// no move at center value zone
 #define JOYSTICK_DELTA_Z_MIN  40	// no move at center value zone
-#endif
+#define JOYSTICK_Z_INVERT false
 
 /* Sound Setup */
 #define SOUND_QUIET  	0
