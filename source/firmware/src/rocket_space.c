@@ -150,6 +150,8 @@ bool init_rocket_hardware () {
 
 void init_rocket_game (int32_t pos_x, int32_t pos_y, int32_t pos_z, int32_t fuel, int32_t gravity, int32_t mode)
  {
+	int32_t randnum = task_cycle_get_32()/2L;
+	int32_t x,y,a,b;
 
 	// set initial rocket conditions
 	if (DEBUG_GAME_AT_START) {
@@ -168,7 +170,6 @@ void init_rocket_game (int32_t pos_x, int32_t pos_y, int32_t pos_z, int32_t fuel
 		r_space.rocket_fuel=FUEL_SUPPLY_INIT;
 	}
 
-	// TODO ###################
 	r_game.gravity_option=gravity;
 	if        (r_game.gravity_option == GAME_GRAVITY_NORMAL) {
 		r_space.gravity_delta = GRAVITY_UMETER_PER_SECOND;
@@ -188,12 +189,25 @@ void init_rocket_game (int32_t pos_x, int32_t pos_y, int32_t pos_z, int32_t fuel
 	r_space.thrust_y = 0;
 	r_space.thrust_z = 0;
 
-	if (r_game.game == GAME_XYZ_MOVE) {
+	if (GAME_XYZ_MOVE == r_game.game) {
 		// continue from where we currently are
 	} else {
 		r_space.rocket_goal_x = pos_x;		// goal game-space rocket position, in uMeters
 		r_space.rocket_goal_y = pos_y;
 		r_space.rocket_goal_z = pos_z;
+
+		if (GAME_START_RANDOM == r_game.start_option) {
+			// get a random centimeter for x,y within 100 millimeters from game start center
+			// xor the top and bottom words
+			x = ((randnum >> 16) & 0x0000ffffL);
+			y = ( randnum        & 0x0000ffffL);
+			a = x & y;
+			b = ~x & ~y;
+			randnum = ~a & ~b;
+			r_space.rocket_goal_x += ((randnum % 20L) - 10) * 10000L;
+			randnum /= 20L;
+			r_space.rocket_goal_y += ((randnum % 20L) - 10) * 10000L;
+		}
 
 		if (GAME_AT_START & mode) {
 			r_space.rocket_x = pos_x;		// preset current game-space rocket position, in uMeters
