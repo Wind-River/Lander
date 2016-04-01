@@ -227,8 +227,20 @@ void scan_controls () {
         r_control.analog_z = seq_buffer[2];
 
 		if (IO_ADAFRUIT_JOYSTICK_ENABLE) {
-			// TODO ####################
+			// map toggle resister array to equivalent reostat values
+			if      (JOYSTICK_HIGH_MIN < r_control.analog_x) r_control.analog_x = JOYSTICK_X_MID + JOYSTICK_DELTA_XY_MIN + 40;
+			else if (JOYSTICK_LOW_MIN  < r_control.analog_x) r_control.analog_x = JOYSTICK_X_MID - JOYSTICK_DELTA_XY_MIN - 40;
+			else                                             r_control.analog_x = JOYSTICK_X_MID;
+			if      (JOYSTICK_HIGH_MIN < r_control.analog_y) r_control.analog_y = JOYSTICK_Y_MID + JOYSTICK_DELTA_XY_MIN + 40;
+			else if (JOYSTICK_LOW_MIN  < r_control.analog_y) r_control.analog_y = JOYSTICK_Y_MID - JOYSTICK_DELTA_XY_MIN - 40;
+			else                                             r_control.analog_y = JOYSTICK_Y_MID;
 		}
+
+		/* is slider 'upside down' ? */
+		if (JOYSTICK_Z_INVERT) {
+			r_control.analog_z = 1023 - r_control.analog_z;
+		}
+
  	}
 }
 
@@ -442,7 +454,7 @@ void init_main() {
 	}
     r_game.fuel_option = GAME_FUEL_NOLIMIT /*GAME_FUEL_NORMAL*/;
     r_game.gravity_option = GAME_GRAVITY_NONE /* GAME_GRAVITY_NORMAL */;
-    r_game.start_option = GAME_START_CENTER;
+    r_game.start_option = GAME_START_RANDOM /* GAME_START_CENTER */;
 
 	// set initial game controls
 	r_control.button_a=0;
