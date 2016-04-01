@@ -66,6 +66,8 @@ void state_callback(char *call_name);
 static void display_state();
 static int32_t find_state(char *select_state);
 
+static int16_t state_depth=0;
+
 // Constructor
 static void StateGuiAdd(char *state_name,uint32_t flags,char *display_1,char *display_2,char *k1,char *k2,char *state_enter,char *state_loop,char *state_exit) {
 	if (StateGuiCount >= StateGuiMax) {
@@ -139,7 +141,7 @@ static void display_state() {
 
 	if (verbose && (0x0000 == (state_array[state_now].state_flags & STATE_NO_VERBOSE))) {
 		log("\n");
-		sprintf(buffer,"/----------------\\ State=%s\n",state_array[state_now].state_name);
+		sprintf(buffer,"/----------------\\ State=%s, Depth=%d\n",state_array[state_now].state_name,state_depth);
 		log(buffer);
 		sprintf(buffer,"|%s|\n",r_control.lcd_line0);
 		log(buffer);
@@ -173,6 +175,9 @@ static int32_t find_state(char *select_state) {
 
 static void do_goto_state(char *select_state_name, bool skip_display) {
 	int32_t display_this_state=true;
+
+	// increment the state depth
+	state_depth++;
 
 	// skip if next state is NOP
 	if (STATE_NOP == select_state_name)
@@ -211,6 +216,10 @@ static void do_goto_state(char *select_state_name, bool skip_display) {
 	// display the new state
 	if ((false == skip_display) && (0x0000 == (state_array[state_now].state_flags & STATE_NO_DISPLAY)))
 		display_state();
+
+
+	// decrement the state depth
+	state_depth--;
 }
 
 /* execute next state, update the display */
@@ -365,6 +374,7 @@ static void S_Flight_Linear_loop () {
 
 static int8_t circle_pass=0;
 static int8_t bumblebee_pass=0;
+static int8_t attract_pass=0;
 
 static void S_Calibrate_Circle_Enter () {
 	// init the calibration compass
@@ -526,6 +536,64 @@ static void S_Flight_Wait_loop () {
 }
 
 
+static void S_Attract_Select_enter () {
+	compass_select(COMPASS_INIT,&calibrate_compass);
+	attract_pass=0;
+	send_Sound(SOUND_ATTRACT);
+	send_NeoPixel(NEOPIXEL_ATTRACT);
+	next_state("S_Attract_Go");
+}
+
+static void S_Attract_Go_loop () {
+	int32_t randnum = task_cycle_get_32()/2L;
+	int32_t x,y,z,a,b;
+
+	// reset to initial attract mode when past end
+	if (11 < attract_pass) {
+		attract_pass=0;
+	}
+
+	// start next attract motion
+	if (0 == attract_pass) {
+		// go to initial Bumble position
+		attract_pass++;
+		calibrate_compass.name = "Bumble";
+		flight_linear(ROCKET_HOME_X+0,ROCKET_HOME_Y+0,ROCKET_HOME_Z+150000L, MOTOR_SPEED_AUTO);
+		r_flight.state_done="S_Attract_Go";
+	} else if ((1 <= attract_pass) && (10 >= attract_pass)) {
+		// run 10 Bumble patterns
+		attract_pass++;
+		// get a random centimeter for x,y,z within 100 millimeters from flight center
+		// xor the top and bottom words
+		x = ((randnum >> 16) & 0x0000ffffL);
+		y = ( randnum        & 0x0000ffffL);
+		a = x & y;
+	    b = ~x & ~y;
+        randnum = ~a & ~b;
+
+		x = ((randnum % 20L) - 10) * 10000L;
+		randnum /= 20L;
+		y = ((randnum % 20L) - 10) * 10000L;
+		randnum /= 20L;
+		z = ((randnum % 20L) - 10) * 10000L;
+
+		flight_linear(ROCKET_HOME_X+x,ROCKET_HOME_Y+y,ROCKET_HOME_Z+150000L+z, MOTOR_SPEED_AUTO);
+		r_flight.state_done="S_Attract_Go";
+		next_state("S_Flight_Linear");
+	} else if (11 == attract_pass) {
+		// run circular pattern
+		attract_pass++;
+		flight_circular((CIRCLE_TEST_DEGREES_SECOND/8)/FRAMES_PER_SECOND,
+						(CIRCLE_TEST_DEGREES_SECOND/4)/FRAMES_PER_SECOND,
+						CIRCLE_TEST_DEGREES_SECOND/FRAMES_PER_SECOND,
+						ROCKET_HOME_X+0, ROCKET_HOME_Y+0, ROCKET_HOME_Z+150000L,
+						(2*360)/(CIRCLE_TEST_DEGREES_SECOND/FRAMES_PER_SECOND));
+		r_flight.state_done="S_Attract_Go";
+		next_state("S_Flight_Circle");
+	}
+}
+
+
 /**** TEST MOTOR STATUS ********************************************************/
 
 
@@ -562,6 +630,12 @@ static void updateLedDisplays () {
 		if (999 < psuedo_speed) psuedo_speed = 999;
 		send_Led2(psuedo_speed);
 	}
+}
+
+static void S_Main_GoHome_enter () {
+	flight_linear(ROCKET_HOME_X,ROCKET_HOME_Y,ROCKET_HOME_Z, MOTOR_SPEED_AUTO);
+	r_flight.state_done="S_Main_Menu";
+	next_state("S_Flight_Linear");
 }
 
 static void S_Main_Menu_enter () {
@@ -1502,6 +1576,10 @@ static void S_Test_Sanity_Tables_enter () {
 	goto_state("S_Main_Menu");
 }
 
+/**** ATTRACT ********************************************************/
+
+
+
 
 /**** SHUTDOWN ********************************************************/
 
@@ -1523,6 +1601,8 @@ void state_callback(char *call_name) {
 	if      (ACTION_NOP == call_name) {
 		return;
 
+	} else if (0 == strcmp("S_Main_GoHome_enter",call_name)) {
+		if (!self_test) S_Main_GoHome_enter();
 	} else if (0 == strcmp("S_Main_Menu_enter",call_name)) {
 		if (!self_test) S_Main_Menu_enter();
 
@@ -1555,6 +1635,10 @@ void state_callback(char *call_name) {
 		if (!self_test) S_Flight_Circle_loop();
 	} else if (0 == strcmp("S_Flight_Wait_loop",call_name)) {
 		if (!self_test) S_Flight_Wait_loop();
+	} else if (0 == strcmp("S_Attract_Select_enter",call_name)) {
+		if (!self_test) S_Attract_Select_enter();
+	} else if (0 == strcmp("S_Attract_Go_loop",call_name)) {
+		if (!self_test) S_Attract_Go_loop();
 
 	} else if (0 == strcmp("S_Test_Motor_Status_loop",call_name)) {
 		if (!self_test) S_Test_Motor_Status_loop();
@@ -1764,12 +1848,21 @@ void init_state () {
 				 STATE_NOP,STATE_NOP,
 				 "S_CalibrateHome_Lock_enter",ACTION_NOP,ACTION_NOP);
 
+	StateGuiAdd("S_Main_GoHome",
+	 STATE_NO_MENU_TEXT,
+	 " Rocket Lander! ",
+//	 "1234567890123456",
+	 "   Fly Home!",
+	 "S_Main_Menu","S_Main_Menu",
+	 "S_Main_GoHome_enter",ACTION_NOP,ACTION_NOP);
+
+
 	StateGuiAdd("S_Main_Menu",
 	 STATE_NO_FLAGS,
 	 " Rocket Lander! ",
 //	 "1234567890123456",
 	 "Next       Play!",
-	 "S_Main_Options","S_Game_Start",
+	 "S_Main_Attract","S_Game_Start",
 	 "S_Main_Menu_enter",ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Game_Start",
@@ -1805,7 +1898,7 @@ void init_state () {
 		 "",
 	//	 "1234567890123456",
 		 "Main      Replay",
-		 "S_Main_Menu","S_Game_Start",
+		 "S_Main_GoHome","S_Game_Start",
 		 "S_Game_Done_enter",ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Game_Panic",
@@ -1819,8 +1912,16 @@ void init_state () {
 		 STATE_NO_FLAGS,
 		 "  <GAME STOP>   ",
 		 "Main      Replay",
-		 "S_Main_Menu","S_Game_Start",
+		 "S_Main_GoHome","S_Game_Start",
 		 ACTION_NOP,ACTION_NOP,ACTION_NOP);
+
+	StateGuiAdd("S_Main_Attract",
+	 STATE_NO_FLAGS,
+	 " Rocket Lander! ",
+//	 "1234567890123456",
+	 "Next    Attract!",
+	 "S_Main_Options","S_Attract_Select",
+	 ACTION_NOP,ACTION_NOP,ACTION_NOP);
 
 	StateGuiAdd("S_Main_Options",
 	 STATE_NO_FLAGS,
@@ -1862,6 +1963,23 @@ void init_state () {
 		 "S_Main_Menu","S_Main_Menu",
 		 ACTION_NOP,ACTION_NOP,ACTION_NOP);
 
+
+// TOP: Attract
+
+	StateGuiAdd("S_Attract_Select",
+	 STATE_NO_VERBOSE,
+	 "",
+	 "",
+	 STATE_NOP,STATE_NOP,
+	 "S_Attract_Select_enter",ACTION_NOP,ACTION_NOP);
+
+		StateGuiAdd("S_Attract_Go",
+		 STATE_NO_VERBOSE|STATE_FROM_CALLBACK,
+		 "Attract Mode ...",
+	//	 "1234567890123456",
+		 "Main        Main",
+		 "S_Main_GoHome","S_Main_GoHome",
+		 ACTION_NOP,"S_Attract_Go_loop",ACTION_NOP);
 
 // TOP: Options
 
@@ -2365,7 +2483,7 @@ void init_state () {
 		 "Motor   Position",
 	//	 "1234567890123456",
 		 "Done          Go",
-		 "S_Main_Menu","S_Calibrate_Position_Go",
+		 "S_Main_GoHome","S_Calibrate_Position_Go",
 		 "S_Calibrate_Position_Enter","S_Calibrate_Position_Loop",ACTION_NOP);
 
 			StateGuiAdd("S_Calibrate_Position_Go",
@@ -2388,7 +2506,7 @@ void init_state () {
 		 "Motor     Circle",
 	//	 "1234567890123456",
 		 "Done          Go",
-		 "S_Main_Menu","S_Calibrate_Circle_Go",
+		 "S_Main_GoHome","S_Calibrate_Circle_Go",
 		 "S_Calibrate_Circle_Enter","S_Calibrate_Circle_Loop",ACTION_NOP);
 
 			StateGuiAdd("S_Calibrate_Circle_Go",
@@ -2566,7 +2684,7 @@ void init_state () {
 	 "Fly...",
 //	 "1234567890123456",
 	 "Stop   ",
-	 "S_Main_Menu",STATE_NOP,
+	 "S_Main_GoHome",STATE_NOP,
 	 ACTION_NOP,"S_Flight_Linear_loop",ACTION_NOP);
 
 	StateGuiAdd("S_Flight_Circle",
@@ -2574,7 +2692,7 @@ void init_state () {
 	 "Circle...",
 //	 "1234567890123456",
 	 "Stop   ",
-	 "S_Main_Menu",STATE_NOP,
+	 "S_Main_GoHome",STATE_NOP,
 	 ACTION_NOP,"S_Flight_Circle_loop",ACTION_NOP);
 
 	StateGuiAdd("S_Flight_Wait",
