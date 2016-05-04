@@ -1,5 +1,7 @@
 #!/usr/bin/python
 
+# adapted from http://git.kernel.org/cgit/bluetooth/bluez.git/tree/test/simple-agent
+
 from __future__ import absolute_import, print_function, unicode_literals
 
 from optparse import OptionParser

@@ -1,3 +1,5 @@
+# taken from http://git.kernel.org/cgit/bluetooth/bluez.git/tree/test/bluezutils.py
+
 import dbus
 
 SERVICE_NAME = "org.bluez"
