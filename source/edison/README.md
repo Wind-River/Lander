@@ -28,7 +28,7 @@
         "lander_score": 999,
         "name": "Mojo Doggie 3"
         "phone": "555-555-5555"
-        "reference" "510-749-2000"
+        "reference": "510-749-2000"
     }]
 ```
 
