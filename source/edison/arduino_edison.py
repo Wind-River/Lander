@@ -27,6 +27,7 @@ ser.dsrdtr = False       #disable hardware (DSR/DTR) flow control
 
 ser.writeTimeout = 0     #timeout for write
 
+# Send Mock Data around, don't use rest api call of DEBUG is on
 if len(sys.argv) > 1:
     print "DEBUG MODE---->";
     DEBUG = True
