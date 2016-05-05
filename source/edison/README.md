@@ -16,7 +16,20 @@
 ##Arduino to Edison Serial
  * Set up to start up automatically
  * log file at /home/root/arduino_edison.log
- * Pass DEBUG to send mock data back and forth by passing rest api call. e.g. python arduino_edison.py DEBUG
+ * User DEBUG  flag to send mock data back and forth. MEAN.io rest api call is not called.
+```
+ python arduino_edison.py DEBUG
+ ```
+ * Submit High Score Message and Reply
+ ```
+a2e:name=______,score=______;
+e2a:ack;
+ ```
+ * Get HighScore Message and Reply
+```
+a2e:highscore?;
+e2a:name=_____,score=______;
+```
 
 ##Rest Api Calls
  * rocketLanderRest.py calls mean stack rest api. If host changes, change ipaddress here
