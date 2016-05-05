@@ -75,7 +75,6 @@ try:
     ser.open()
 except Exception, e:
     print "error open serial port: " + str(e)
-#    exit()
 
 if ser.isOpen():
 
@@ -87,10 +86,10 @@ if ser.isOpen():
         time.sleep(0.5)
 
         while True:
-
+            sys.stdout.flush()
             response = ser.readline()
 
-            print("read data: " + response)
+            print("\n\n\n\n>>>>>>>> read data: " + response )
             try:
                 jsonString = processMessage(response)
             except Exception, e:
@@ -98,9 +97,9 @@ if ser.isOpen():
                 continue;
             try:
                 if jsonString:
-                    if DEBUG:
-                        print "Submit High Score"
-                    #submit high score
+                    # submit high score
+                    print "Submit High Score"
+
                     data = json.loads(jsonString)
                     print json.dumps(data, indent=4, sort_keys=True)
                     if not DEBUG:
@@ -109,12 +108,23 @@ if ser.isOpen():
                     ser.write(HANDSHAKE)
                 else:
                     # get the high score
-                    if DEBUG:
-                        print "Get high score"
+                    print "Get high score"
+                    
+                    highscore = ""
                     if not DEBUG:
                         output = subprocess.check_output(["/usr/bin/python /home/root/rocketLander.py"], shell=True);
-              
-                    ser.write(HANDSHAKE)
+                        parsedOutput = json.loads(output)
+                        name = parsedOutput[0]['name']
+                        score = parsedOutput[0]['lander_score']
+
+                        # e2a:name=_____,score=______;
+                        highscore = 'e2a:name=' + name + ',score=' + score + ";"
+                    else:
+                        highscore = 'e2a:name=MojoSuperDoggie,score=10'
+                    
+                    print "HS: " + highscore
+                    ser.write(highscore)
+                        
             except Exception, e:
                 print "unable to spawn rest api call...: " + str(e)
 
