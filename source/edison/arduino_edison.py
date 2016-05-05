@@ -111,15 +111,13 @@ if ser.isOpen():
                     # get the high score
                     print "Get high score"
                     
-                    highscore = ""
                     if not DEBUG:
-                        output = subprocess.check_output(["/usr/bin/python /home/root/rocketLander.py"], shell=True);
+                        output = subprocess.check_output(["python", "/home/root/rocketLanderRest.py"]);
                         parsedOutput = json.loads(output)
                         name = parsedOutput[0]['name']
                         score = parsedOutput[0]['lander_score']
-
                         # e2a:name=_____,score=______;
-                        highscore = 'e2a:name=' + name + ',score=' + score + ";"
+                        highscore = "e2a:name=" + str(name) + ",score=" + str(score) + ";"
                     else:
                         highscore = 'e2a:name=MojoSuperDoggie,score=10'
                     

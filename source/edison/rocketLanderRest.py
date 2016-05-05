@@ -21,9 +21,9 @@ else :
     response = requests.get(url)
     if DEBUG:
     	print "Get\n"
-	    parsedJson = json.loads(response.text)
-	    print json.dumps(parsedJson, indent=4, sort_keys=True)
-	else
-    	print response.txt
+	parsedJson = json.loads(response.text)
+	print json.dumps(parsedJson, indent=4, sort_keys=True)
+    else:
+    	print response.text
 
 
