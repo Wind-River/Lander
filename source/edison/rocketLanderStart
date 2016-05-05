@@ -1,0 +1,3 @@
+#!/bin/sh
+/home/root/bluetoothstartup.sh
+/usr/bin/python /home/root/arduino_edison.py > /home/root/arduino_edison.log &
