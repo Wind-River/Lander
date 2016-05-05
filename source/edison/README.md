@@ -21,10 +21,10 @@
  python arduino_edison.py DEBUG
  ```
  * Submit High Score Message and Reply
- ```
+```
 a2e:name=______,score=______;
 e2a:ack;
- ```
+```
  * Get HighScore Message and Reply
 ```
 a2e:highscore?;
