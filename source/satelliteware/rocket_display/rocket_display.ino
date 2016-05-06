@@ -55,7 +55,9 @@
 #define ENABLE_LEDRGB   0
 #define ENABLE_SERIAL
 
-#define ENABLE_TIMING   1   // track the I2C timing overhead
+#define ENABLE_TIMING   0   // track the I2C timing overhead
+
+boolean message2send =false;
 
 //
 // which Arduino is this
@@ -361,7 +363,11 @@ String message_in="";
 int ping_on=0;
 
 void send_edison_msg (String mode,String message) {
-  Serial.println("["+mode+":"+message+"]");
+  Serial.print("[");
+  Serial.print(mode);
+  Serial.print(":");
+  Serial.print(message);
+  Serial.println("]");
   mySerial.println(message);
 }
 
@@ -381,6 +387,11 @@ void loop() {
 
   // Loop 10 times a second
   //delay(100);
+
+  if (message2send) {
+    send_edison_msg("SEND",edison_msg);
+    message2send=false;
+  }
 
   // process any debugging commands
   if (Serial.available()) {
@@ -547,8 +558,15 @@ void receiveEvent(int howMany) {
       Serial.print((char *)buffer);
       Serial.println(")");
       strcpy(high_score,HIGH_NOT_READY);
-      strcpy(edison_msg,(char *) &buffer[1]);
-      send_edison_msg("SEND",edison_msg);
+      for (i=0;i<30;i++) {
+        edison_msg[i] = buffer[i+1]; 
+      }
+      Serial.print("BAR=(");
+      Serial.print(edison_msg);
+      Serial.println(")");
+      //send_edison_msg("SEND","a2e:ping;");
+      message2send=true;
+      //send_edison_msg(String("SEND"),String(edison_msg));
     }
 
     // Set next request mode
@@ -647,3 +665,4 @@ void requestEvent() {
   }
 
 }
+
