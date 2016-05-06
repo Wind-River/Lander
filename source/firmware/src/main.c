@@ -228,10 +228,12 @@ void scan_controls () {
 
 		if (IO_ADAFRUIT_JOYSTICK_ENABLE) {
 			// map toggle resister array to equivalent reostat values
-			if      (JOYSTICK_HIGH_MIN < r_control.analog_x) r_control.analog_x = JOYSTICK_X_MID + JOYSTICK_DELTA_XY_MIN + 40;
+			if      (r_control.analog_x<                100) r_control.analog_x = JOYSTICK_X_MID;
+			else if (JOYSTICK_HIGH_MIN < r_control.analog_x) r_control.analog_x = JOYSTICK_X_MID + JOYSTICK_DELTA_XY_MIN + 40;
 			else if (JOYSTICK_LOW_MIN  < r_control.analog_x) r_control.analog_x = JOYSTICK_X_MID - JOYSTICK_DELTA_XY_MIN - 40;
 			else                                             r_control.analog_x = JOYSTICK_X_MID;
-			if      (JOYSTICK_HIGH_MIN < r_control.analog_y) r_control.analog_y = JOYSTICK_Y_MID + JOYSTICK_DELTA_XY_MIN + 40;
+			if      (r_control.analog_y<                100) r_control.analog_y = JOYSTICK_Y_MID;
+			else if (JOYSTICK_HIGH_MIN < r_control.analog_y) r_control.analog_y = JOYSTICK_Y_MID + JOYSTICK_DELTA_XY_MIN + 40;
 			else if (JOYSTICK_LOW_MIN  < r_control.analog_y) r_control.analog_y = JOYSTICK_Y_MID - JOYSTICK_DELTA_XY_MIN - 40;
 			else                                             r_control.analog_y = JOYSTICK_Y_MID;
 		}
