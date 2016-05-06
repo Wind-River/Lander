@@ -380,6 +380,21 @@ void send_Pan_Tilt(uint32_t pan,uint32_t tilt) {
 	}
 }
 
+// pan and tilt: 0 .. 255
+void send_high_score(char *msg) {
+
+	uint8_t buf[40];
+	uint16_t i;
+
+	buf[0]='w';
+	for (i=0;i<strlen(msg);i++) {
+		buf[i+1] = (uint8_t) msg[i];
+	}
+	buf[i+1]='\0';
+	
+	send_rocket_display(buf,2+strlen(msg));
+}
+
 /*
  * init_game : initialize variables for a new game
  *
