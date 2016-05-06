@@ -1,9 +1,17 @@
 #Edison Board Set up
 
- * Startup script is /etc/init.d/rocketLanderStart
- * All scripts have been copied to /home/root on the edison board
- * u:p root:rocketLander
-
+ * To set up the board
+```
+ configure_edison --setup
+ ```
+ * Copy Contents of this edision directory to /home/root on the edison board
+ * Copy startup script to /etc/init.d/rocketLanderStart
+ * Put rocketLanderStart in startup with 
+ ```
+update-rc.d -f rocketLanderStart defaults
+```
+ * Setup Complete
+ 
 ##Wifi
  * Will need to be reconfigured, atm only works at WIND 
  * configure_edison --wifi
