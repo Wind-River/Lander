@@ -40,17 +40,10 @@
  *   
  */
 
-
-#define ENABLE_LED1     1
-#define ENABLE_LED2     1
-#define ENABLE_SOUND    1
-#define ENABLE_PAN_TILT 0
-#define ENABLE_NEOPIXEL 0
-#define ENABLE_LEDRGB   0
- 
 #include <Wire.h>
 #include "TM1637.h"
 #include "MicroAve.h"
+#include <SoftwareSerial.h>
 
 // General Enbles
 #define ENABLE_I2C      1
@@ -60,6 +53,7 @@
 #define ENABLE_PAN_TILT 0
 #define ENABLE_NEOPIXEL 0
 #define ENABLE_LEDRGB   0
+#define ENABLE_SERIAL
 
 #define ENABLE_TIMING   1   // track the I2C timing overhead
 
@@ -88,8 +82,8 @@ TM1637 tm1637_2(LED2_CLK,LED2_DIO);
 #define SOUND_TRIGGER_3_PORT  9
 
 // Pan and Tilt
-#define PWM_PAN_PORT  10
-#define PWM_TILT_PORT 11
+#define PWM_PAN_PORT  x10
+#define PWM_TILT_PORT x11
 
 // Neopixel
 #define Neo_Pixel_PORT  13
@@ -121,10 +115,20 @@ TM1637 tm1637_2(LED2_CLK,LED2_DIO);
 #define PWM_TILT_PORT 4 // ############ TODO
 
 // Neopixel
-#define Neo_Pixel_PORT  13
+//#define Neo_Pixel_PORT  13
 
 // LED-RGB
-#define LED_RGB_PORT  12
+//#define LED_RGB_PORT  12
+
+// Software Serial
+//SoftwareSerial mySerial(10, 11); // RX, TX
+SoftwareSerial mySerial(3,4); // RX, TX
+// Arduino_3 -> Edison_1 (TX)
+// Arduino_4 -> Edison_0 (RX)
+#define WIN_STR_MAX 40
+char edison_msg[WIN_STR_MAX];
+
+#define led 13  // built-in LED
 
 #endif
 
@@ -148,7 +152,15 @@ TM1637 tm1637_2(LED2_CLK,LED2_DIO);
 
 /* I2C port Setup*/
 #define ROCKET_DISPLAY_I2C_ADDRESS 18
-#define I2C_READ_MAX 20
+#define I2C_READ_MAX 40
+/* received commands */
+#define REQUEST_COMMAND     '?'  // set the request mode
+/* request read commands */
+#define REQUEST_HIGH_SCORE  'h'  // return current move status as percentage completed
+/* Request command mode */
+uint8_t request_command = ' ';
+#define HIGH_NOT_READY "~"
+char high_score[I2C_READ_MAX];
 
 /* Timing analysis objects */
 MicroAve ave_i2c;
@@ -214,20 +226,31 @@ boolean tigger_sound = false;
 byte sound_pattern;
 void write_sound() {
   if (ENABLE_SOUND) {
-      if (sound_pattern & 0x01)
-        digitalWrite(SOUND_TRIGGER_1_PORT, HIGH);
-      else
-        digitalWrite(SOUND_TRIGGER_1_PORT, LOW);
+      Serial.println("** GO Sound!");
 
-      if (sound_pattern & 0x02)
-        digitalWrite(SOUND_TRIGGER_2_PORT, HIGH);
-      else
-        digitalWrite(SOUND_TRIGGER_2_PORT, LOW);
+      if (sound_pattern & 0x01) {
+        digitalWrite(SOUND_TRIGGER_1_PORT, HIGH);
+        Serial.println("** GO Sound! 1=H");
+      } else {
+        digitalWrite(SOUND_TRIGGER_1_PORT, LOW);
+        Serial.println("** GO Sound! 1=L");
+      }
       
-      if (sound_pattern & 0x04)
+      if (sound_pattern & 0x02) {
+        digitalWrite(SOUND_TRIGGER_2_PORT, HIGH);
+        Serial.println("** GO Sound! 2=H");
+      } else {
+        digitalWrite(SOUND_TRIGGER_2_PORT, LOW);
+        Serial.println("** GO Sound! 2=L");
+      }
+      
+      if (sound_pattern & 0x04) {
         digitalWrite(SOUND_TRIGGER_3_PORT, HIGH);
-      else
+        Serial.println("** GO Sound! 3=H");
+      } else {
         digitalWrite(SOUND_TRIGGER_3_PORT, LOW);
+        Serial.println("** GO Sound! 3=L");
+      }
   }
   tigger_sound = false;
 }
@@ -265,6 +288,9 @@ void setup() {
   write_led_rgb();
 
   // init sound 
+  pinMode(SOUND_TRIGGER_1_PORT, OUTPUT);
+  pinMode(SOUND_TRIGGER_2_PORT, OUTPUT);
+  pinMode(SOUND_TRIGGER_3_PORT, OUTPUT);
   sound_pattern=SOUND_QUIET;
   write_sound();
 
@@ -277,6 +303,7 @@ void setup() {
     Serial.println("Init I2C");
     Wire.begin(ROCKET_DISPLAY_I2C_ADDRESS); // Set I2C slave address
     Wire.onReceive(receiveEvent); // register the I2C receive event
+    Wire.onRequest(requestEvent); // register the I2C request event
   }
 
   Serial.println("Setup Done!");
@@ -284,6 +311,14 @@ void setup() {
   // preset the outputs
   preset_outputs();
 
+  // set the data rate for the SoftwareSerial port
+  mySerial.begin(9600);
+  mySerial.println("Arduino to Edison Ready!");
+
+  // preset the high score data
+  strcpy(high_score,HIGH_NOT_READY);
+
+  //
   show_help();
   
 }
@@ -319,18 +354,33 @@ void preset_outputs() {
 }
 
 //
+// Software Serial server ()
+//
+
+String message_in="";
+int ping_on=0;
+
+void send_edison_msg (String mode,String message) {
+  Serial.println("["+mode+":"+message+"]");
+  mySerial.println(message);
+}
+
+//
 // Loop()
 //
 
 int loop_count=0;
 int ping_count=0;
+unsigned long millisecs_then=0;
+
 void loop() {
+  unsigned long millisecs_now;
 
   // how long were we gone?
   ave_loop.setStop();
 
   // Loop 10 times a second
-  delay(100);
+  //delay(100);
 
   // process any debugging commands
   if (Serial.available()) {
@@ -348,17 +398,56 @@ void loop() {
       preset_outputs();
     }
 
+    if ('s' == char_in) {
+      sound_pattern++;
+      tigger_sound = true;
+      Serial.print("** Sound = ");
+      Serial.println(sound_pattern);
+    }
+
     if ('v' == char_in) {
       if (++verbose > VERBOSE_MAX) verbose=0;
       Serial.print("** Verbose = ");
       Serial.println(verbose);
     }
 
+    if ('1' == char_in)
+      send_edison_msg("SEND","a2e:led13=on;");
+    else if ('2' == char_in)
+      send_edison_msg("SEND","a2e:led13=off;");
+    else if ('3' == char_in)
+      send_edison_msg("SEND","a2e:uname;");
+    else if ('4' == char_in)
+      send_edison_msg("SEND","a2e:message=the quick brown fox jumped over the lazy dog;");
+    else if ('p' == char_in)
+      send_edison_msg("SEND","a2e:ping;");
+
     if ('?' == char_in) {
       show_help();
     }
   }
 
+  if (mySerial.available()) {
+    int in_byte = mySerial.read();
+
+    if ((10 != in_byte) && (13 != in_byte)){
+      if (verbose) Serial.write(in_byte);
+      message_in += char(in_byte);
+    } else if (0 < message_in.length()) {
+      Serial.println("\n[RECEIVE:" + message_in + "]");
+      //for (int i=0;i<message_in.length();i++) {
+      //    Serial.println("character ("+String(i)+") = "+int(message_in.charAt(i) ) );
+      //}
+      
+      if (message_in.startsWith("e2a:name=")) {
+          message_in.toCharArray(high_score,I2C_READ_MAX);
+          send_edison_msg("REPLY","e2a:ack;");
+      } else if (message_in == "e2a:ping;") {
+          send_edison_msg("REPLY","e2a:pong;");
+      } 
+      message_in="";
+    }
+  }
   // execute requested asynchronous updates
   if (tigger_led1) write_led1();
   if (tigger_led2) write_led2();
@@ -368,13 +457,13 @@ void loop() {
   if (tigger_sound) write_sound();
 
   // let us know that we are still live
-  if (++loop_count>=30) {
-    loop_count=0;
+  millisecs_now = millis();
+  if ( 5000 < (millisecs_now - millisecs_then) ) {
+    millisecs_then = millisecs_now;
     if (verbose > 0) {
       Serial.print("ping:");
-      Serial.println(ping_count);
+      Serial.println(ping_count++);
     }
-    ping_count++;
   }
 
   // capture the outside loop overhead
@@ -407,6 +496,7 @@ void receiveEvent(int howMany) {
 
   byte buffer[I2C_READ_MAX];
   int read_count=0;
+  int i;
 
   if (ENABLE_TIMING) ave_i2c.setStart();
     
@@ -448,6 +538,32 @@ void receiveEvent(int howMany) {
       ledrgb_g = buffer[2];
       ledrgb_b = buffer[3];
       tigger_ledrgb = true;
+    }
+
+    if ('w' == (char) buffer[0]) {
+      // "a2e:name=12345678,score=12345;"
+      //  123456789012345678901234567890
+      Serial.print("WIN(");
+      Serial.print((char *)buffer);
+      Serial.println(")");
+      strcpy(high_score,HIGH_NOT_READY);
+      strcpy(edison_msg,(char *) &buffer[1]);
+      send_edison_msg("SEND",edison_msg);
+    }
+
+    // Set next request mode
+    if ('?' == (char) buffer[0]) {
+      request_command = buffer[1];
+
+      if (REQUEST_HIGH_SCORE == request_command) {
+        sprintf(edison_msg,"a2e:highscore?;");
+        send_edison_msg("SEND",edison_msg);
+      }
+
+      if (verbose > 2) {
+        Serial.print("*** I2C Next Request Mode=");
+        Serial.println((char) request_command);
+      }
     }
 
   }
@@ -516,3 +632,18 @@ void display_debug() {
   if (ENABLE_TIMING) ave_i2c.displayResults("i2c",true);
 }
 
+void requestEvent() {
+  uint8_t i;
+  uint8_t buffer[I2C_READ_MAX];
+
+  if (REQUEST_HIGH_SCORE == request_command) {
+
+    strcpy((char *) buffer,high_score);
+    Wire.write(strlen(high_score)+1); // respond with message of 1 byte
+  } else {
+    // unknown request state
+    buffer[0] = (uint8_t) '?';
+    Wire.write(1); // respond with message of 1 byte
+  }
+
+}
