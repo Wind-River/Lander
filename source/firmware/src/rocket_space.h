@@ -70,7 +70,7 @@
 // Moon Gravity = 1.622 m/s² => 1622 uM/s
 #define GRAVITY_UMETER_PER_SECOND 200
 // Safe Lander <= 1.900 m/s => 1900 uM/s
-#define SAFE_UMETER_PER_SECOND 1900
+#define SAFE_UMETER_PER_SECOND 4000
 
 
 // Thrust power, in mMeters per second
