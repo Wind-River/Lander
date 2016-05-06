@@ -44,9 +44,8 @@ typedef char boolean;
 #define DEBUG_GAME_AT_START			false	// for game play testing, assume rocket already at start position
 
 // Specific installed joystick hardware
-#define IO_GROVE_JOYSTICK_ENABLE 	true	// enable the Grove thumb-joystick on the A0/A1 port
-#define IO_GROVE_JOYSTICK_TOGGLE 	true	// enable the Grove thumb-joystick in toggle mode (current default implementation)
-#define IO_ADAFRUIT_JOYSTICK_ENABLE false	// enable the Adafruit Arcade-style toggle-joystick
+#define IO_GROVE_JOYSTICK_ENABLE 	false	// enable the Grove thumb-joystick on the A0/A1 port
+#define IO_ADAFRUIT_JOYSTICK_ENABLE true	// enable the Adafruit Arcade-style toggle-joystick
 
 // Time Controls
 
