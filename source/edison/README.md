@@ -1,17 +1,23 @@
 #Edison Board Set up
 
  * To set up the board
-```
+ ```
  configure_edison --setup
  ```
  * Copy Contents of this edision directory to /home/root on the edison board
+ * Install python libraries pyserial and requests
+```
+pip install pyserial
+pip install requests
+```
  * Copy startup script to /etc/init.d/rocketLanderStart
  * Put rocketLanderStart in startup with 
  ```
 update-rc.d -f rocketLanderStart defaults
-```
+ ```
+
  * Setup Complete
- 
+
 ##Wifi
  * Will need to be reconfigured, atm only works at WIND 
  * configure_edison --wifi
