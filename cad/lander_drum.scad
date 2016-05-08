@@ -9,9 +9,9 @@
 // h    - screw thread height
 // step - step size in degree
 // 
-include <openscad-2013.06\libraries\MCAD\polyholes.scad>
+include <MCAD\polyholes.scad>
 
-FlatShaft=false;
+FlatShaft=true;
 
 
 module screwthread_triangle(P) {
@@ -73,7 +73,7 @@ difference()
 		{
 			difference()
 			{
-				cylinder(r=2.5, h=18, $fn=100);
+				cylinder(r=2.85, h=18, $fn=100);
 				//polyhole(18,5);
 				if(FlatShaft)
 				{
