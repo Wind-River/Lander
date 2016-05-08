@@ -68,6 +68,9 @@ static int32_t find_state(char *select_state);
 
 static int16_t state_depth=0;
 
+char highest_name[20] = "<none>";
+int16_t highest_score = 0;
+
 // Constructor
 static void StateGuiAdd(char *state_name,uint32_t flags,char *display_1,char *display_2,char *k1,char *k2,char *state_enter,char *state_loop,char *state_exit) {
 	if (StateGuiCount >= StateGuiMax) {
@@ -160,7 +163,6 @@ static void display_state() {
 		groveLcdPrint(i2c, 1, 0, r_control.lcd_line1, strlen(r_control.lcd_line1));
 	}
 }
-
 
 static int32_t find_state(char *select_state) {
 	int32_t i;
@@ -641,6 +643,7 @@ static void S_Main_GoHome_enter () {
 static void S_Main_Menu_enter () {
 	send_Sound(SOUND_ATTRACT);
 	send_NeoPixel(NEOPIXEL_ATTRACT);
+	groveLcdClear(i2c);
 }
 
 static uint32_t panic_timer=0L;
@@ -732,19 +735,50 @@ static void S_Game_Play_loop () {
 	updateLedDisplays();
 }
 
+int32_t win_timeout = 0L;
+int32_t win_timethen = 0L;
+int16_t score = 0;
+
 static void S_Game_Done_enter () {
+	win_timeout = (10L * sys_clock_ticks_per_sec);
 	if (SAFE_UMETER_PER_SECOND < abs(r_space.rocket_delta_z)) {
 		sprintf(buffer,"CRASH :-( S=%04d",abs(r_space.rocket_delta_z));
 		// stop the show
 		send_Sound(SOUND_CRASH);
 		send_NeoPixel(NEOPIXEL_CRASH);
+		score = 0;
 	} else {
-		sprintf(buffer,"WIN! :-) S=%04d",abs(r_space.rocket_delta_z));
+		score = abs(FUEL_SUPPLY_INIT - r_space.rocket_fuel);
+		sprintf(buffer,"WIN! :-) S=%04d",score);
 		// stop the show
 		send_Sound(SOUND_LAND);
 		send_NeoPixel(NEOPIXEL_LAND);
+
+		if (IO_WINNING_SCORE) {
+			if (highest_score < score) {
+				win_timeout = (2L * sys_clock_ticks_per_sec);
+				set_lcd_display(LCD_BUFFER_2,"!NEW HIGH SCORE!");
+			}
+		}
 	}
 	set_lcd_display(LCD_BUFFER_1,buffer);
+	win_timethen = task_tick_get_32();
+}
+
+static void S_Game_Done_loop () {
+	int32_t win_timenow = task_tick_get_32();
+
+	if (win_timeout < (win_timenow - win_timethen)) {
+
+		if (highest_score < score) {
+			highest_score = score;
+			next_state("S_Name_Select");
+		} else {
+			next_state("S_Main_GoHome");
+		}
+
+	}
+
 }
 
 static void S_Game_Panic_enter () {
@@ -1579,6 +1613,66 @@ static void S_Test_Sanity_Tables_enter () {
 /**** ATTRACT ********************************************************/
 
 
+/**** HIGH NAME ENTER ********************************************************/
+
+int16_t name_pos = 0;
+char high_name[9] = "         ";
+
+void S_Name_enter () {
+	if(name_pos > 0 ){
+		name_pos = 0;
+	} else {
+	 	strcpy(high_name, "ROCKET   ");
+		sprintf(buffer,"Name:  %s",high_name);
+		set_lcd_display(LCD_BUFFER_1,buffer);
+		display_state();
+	}
+
+	goto_state("S_Enter_Name");
+}
+
+void S_Name_Char_enter () {
+	// increment character at curent position
+	printf("Hello 1 POS:name_pos %d\n", name_pos);
+
+	high_name[name_pos]++;
+	sprintf(buffer,"Name:  %s",high_name);
+	set_lcd_display(LCD_BUFFER_1,buffer);
+	display_state();
+
+	goto_state ("S_Enter_Name");
+
+}
+
+void S_Name_Next_enter () {
+	printf("Hello 2 POS:name_pos %d\n", name_pos);
+
+	name_pos++;
+	if(8 < name_pos){
+		printf("Hello 3 Should Clear the menus\n");
+		goto_state("S_High_Score_Show");
+
+	} else{
+		goto_state ("S_Enter_Name");
+	}
+}
+
+void S_High_Score_Done () {
+
+	strcpy(highest_name,high_name);
+	printf("High Score Name is: %s\n", high_name);
+	printf("High Score is: %d\n", highest_score);
+
+	// Save it somewhere
+	if (IO_WINNING_SCORE) {
+		sprintf(buffer,"a2e:name=%s,score=%d;",high_name,highest_score);
+		send_high_score(buffer);
+	}
+
+	name_pos = 0;
+	goto_state("S_Main_Menu");
+
+}
 
 
 /**** SHUTDOWN ********************************************************/
@@ -1653,6 +1747,8 @@ void state_callback(char *call_name) {
 		if (!self_test) S_Game_Panic_enter();
 	} else if (0 == strcmp("S_Game_Done_enter",call_name)) {
 		if (!self_test) S_Game_Done_enter();
+	} else if (0 == strcmp("S_Game_Done_loop",call_name)) {
+		if (!self_test) S_Game_Done_loop();
 	} else if (0 == strcmp("S_Game_Display_Next_enter",call_name)) {
 		if (!self_test) S_Game_Display_Next_enter();
 
@@ -1770,6 +1866,15 @@ void state_callback(char *call_name) {
 		if (!self_test) S_Test_Sound_exit();
 	} else if (0 == strcmp("S_Test_Sound_Next_enter",call_name)) {
 		if (!self_test) S_Test_Sound_Next_enter();
+
+	} else if (0 == strcmp("S_Name_enter",call_name)) {
+		if (!self_test) S_Name_enter();
+	} else if (0 == strcmp("S_Name_Char_enter",call_name)) {
+		if (!self_test) S_Name_Char_enter();
+	} else if (0 == strcmp("S_Name_Next_enter",call_name)) {
+		if (!self_test) S_Name_Next_enter();
+	} else if (0 == strcmp("S_High_Score_Done",call_name)) {
+		if (!self_test) S_High_Score_Done();
 
 	} else if (0 == strcmp("S_Shutdown_enter",call_name)) {
 		if (!self_test) S_Shutdown_enter();
@@ -1899,7 +2004,7 @@ void init_state () {
 	//	 "1234567890123456",
 		 "Main      Replay",
 		 "S_Main_GoHome","S_Game_Start",
-		 "S_Game_Done_enter",ACTION_NOP,ACTION_NOP);
+		 "S_Game_Done_enter","S_Game_Done_loop",ACTION_NOP);
 
 		StateGuiAdd("S_Game_Panic",
 		 STATE_NO_VERBOSE|STATE_NO_MENU_TEXT,
@@ -1911,6 +2016,13 @@ void init_state () {
 		StateGuiAdd("S_Game_Stop",
 		 STATE_NO_FLAGS,
 		 "  <GAME STOP>   ",
+		 "Main      Replay",
+		 "S_Main_GoHome","S_Game_Start",
+		 ACTION_NOP,ACTION_NOP,ACTION_NOP);
+
+		StateGuiAdd("S_Game_HighScore",
+		 STATE_NO_FLAGS,
+		 " NEW HIGH SCORE!",
 		 "Main      Replay",
 		 "S_Main_GoHome","S_Game_Start",
 		 ACTION_NOP,ACTION_NOP,ACTION_NOP);
@@ -2281,7 +2393,7 @@ void init_state () {
 	 "Test...         ",
 //	 "1234567890123456",
 	 "Next Sanity_Test",
-	 "S_Test_Simulation","S_Test_Sanity_Select",
+	 "S_Test_Name","S_Test_Sanity_Select",
 	 ACTION_NOP,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Test_Sanity_Select",
@@ -2315,6 +2427,66 @@ void init_state () {
 		 "Main        Next",
 		 "S_Main_Menu","S_Main_Menu",
 		 "S_Test_Sanity_Tables_enter",ACTION_NOP,ACTION_NOP);
+
+	StateGuiAdd("S_Test_Name",
+	 STATE_NO_FLAGS,
+	 "Test...         ",
+//	 "1234567890123456",
+	 "Next   Name_Test",
+	 "S_Test_Simulation","S_Name_Select",
+	 ACTION_NOP,ACTION_NOP,ACTION_NOP);
+
+		StateGuiAdd("S_Name_Select",
+		 STATE_NO_FLAGS,
+		 "Name:           ",
+	//	 "1234567890123456",
+		 "Char        Next",
+		 STATE_NOP, STATE_NOP,
+		 "S_Name_enter",ACTION_NOP,ACTION_NOP);
+
+		StateGuiAdd("S_Enter_Name",
+		 STATE_NO_FLAGS,
+		 "",
+		 //"",
+		 "Char        Next",
+		 "S_Name_Char","S_Name_Next",
+		 ACTION_NOP,ACTION_NOP,ACTION_NOP);
+
+		StateGuiAdd("S_Name_Char",
+		 STATE_NO_FLAGS,
+		 "",
+		 "",
+		 STATE_NOP, STATE_NOP,
+		 "S_Name_Char_enter",ACTION_NOP,ACTION_NOP);
+
+		StateGuiAdd("S_Name_Next",
+		 STATE_NO_FLAGS,
+		 "",
+		 "",
+		 STATE_NOP, STATE_NOP,
+		 "S_Name_Next_enter",ACTION_NOP,ACTION_NOP);
+
+		// Why is it going straight to done?
+		StateGuiAdd("S_High_Score_Show",
+		 STATE_NO_FLAGS,
+		 "",
+		 "Done        Edit",
+		 "S_High_Score_Done", "S_Name_Edit",
+		 ACTION_NOP,ACTION_NOP,ACTION_NOP);
+
+	 	StateGuiAdd("S_Name_Edit",
+		 STATE_NO_FLAGS,
+		 "",
+		 "Char        Next",
+		 STATE_NOP, STATE_NOP,
+		 "S_Name_enter",ACTION_NOP,ACTION_NOP);
+
+		StateGuiAdd("S_High_Score_Done",
+		 STATE_NO_FLAGS,
+		 "",
+		 "",
+		 STATE_NOP, STATE_NOP,
+		 "S_High_Score_Done",ACTION_NOP,ACTION_NOP);
 
 	StateGuiAdd("S_Test_Simulation",
 	 STATE_NO_FLAGS,

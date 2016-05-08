@@ -1,0 +1,6 @@
+#!/bin/sh
+/home/root/bluetoothstartup.sh
+/usr/bin/node /home/root/enable_serial_edison.js&
+sleep 3
+/usr/bin/python /home/root/arduino_edison.py > /home/root/arduino_edison.log &
+

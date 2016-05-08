@@ -1,0 +1,5 @@
+var m = require('mraa'); //require mraa
+
+u = new m.Uart(0)
+
+console.log(u.getDevicePath())

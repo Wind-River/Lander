@@ -23,6 +23,7 @@ typedef char boolean;
 // General Enablement
 
 #define IO_BUTTON_BRINGUP			false	// init state to display I/O button and slider values
+#define IO_WINNING_SCORE            true	// enable the winning score data path
 
 #define IO_BUTTONS_ENABLE			true	// enable the buttons to change state
 #define IO_JOYSTICK_ENABLE			true	// enable the joystick for X-Y
@@ -44,9 +45,8 @@ typedef char boolean;
 #define DEBUG_GAME_AT_START			false	// for game play testing, assume rocket already at start position
 
 // Specific installed joystick hardware
-#define IO_GROVE_JOYSTICK_ENABLE 	true	// enable the Grove thumb-joystick on the A0/A1 port
-#define IO_GROVE_JOYSTICK_TOGGLE 	true	// enable the Grove thumb-joystick in toggle mode (current default implementation)
-#define IO_ADAFRUIT_JOYSTICK_ENABLE false	// enable the Adafruit Arcade-style toggle-joystick
+#define IO_GROVE_JOYSTICK_ENABLE 	false	// enable the Grove thumb-joystick on the A0/A1 port
+#define IO_ADAFRUIT_JOYSTICK_ENABLE true	// enable the Adafruit Arcade-style toggle-joystick
 
 // Time Controls
 
@@ -238,6 +238,7 @@ void send_NeoPixel(uint32_t pattern);
 void send_Sound(uint32_t pattern);
 void send_Pan_Tilt(uint32_t pan,uint32_t tilt);
 void send_Led_Rgb(uint32_t r,uint32_t g,uint32_t b);
+void send_high_score(char *msg);
 
 void init_game();
 void init_main();
