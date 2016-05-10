@@ -440,11 +440,11 @@ void init_game () {
 	} else if (r_game.game == GAME_XYZ_LAND) {
 		init_rocket_game(init_x, init_y, GAME_Z_POS_MAX, r_game.fuel_option, r_game.gravity_option,GAME_PLAY);
 	} else if (r_game.game == GAME_XYZ_FLIGHT) {
-		init_rocket_game(init_x, init_y, ROCKET_HOME_Z, r_game.fuel_option, r_game.gravity_option,GAME_PLAY);
+		init_rocket_game(init_x, init_y, GAME_Z_POS_MAX, r_game.fuel_option, r_game.gravity_option,GAME_PLAY);
 	} else if (r_game.game == GAME_XYZ_AUTO) {
 		init_rocket_game(init_x, init_y, GAME_Z_POS_MAX, r_game.fuel_option, r_game.gravity_option,GAME_PLAY);
 	} else if (r_game.game == GAME_XYZ_MOVE) {
-		init_rocket_game(init_x, init_y, ROCKET_HOME_Z /* GAME_Z_POS_MAX/2 */, r_game.fuel_option, r_game.gravity_option,GAME_PLAY);
+		init_rocket_game(init_x, init_y, GAME_Z_POS_MAX, r_game.fuel_option, r_game.gravity_option,GAME_PLAY);
 	} else {
 		init_rocket_game(init_x, init_y, GAME_Z_POS_MAX, r_game.fuel_option, r_game.gravity_option,GAME_PLAY);
 	}
