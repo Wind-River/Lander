@@ -400,6 +400,9 @@ void set_rocket_position ()
 	if (IO_MOTOR_ENABLE && (GAME_SIMULATE != r_game.game_mode)) {
 		rocket_position_send();
 		rocket_command_send(ROCKET_MOTOR_CMD_PRESET);
+ 
+ 		// update Antennae
+		antenna_update();
 	}
 
  }
@@ -513,10 +516,15 @@ void rocket_increment_send (int32_t increment_nw, int32_t increment_ne, int32_t 
 		buf[8]=(uint8_t) ((increment_se & 0x0000ffL)     );
 		i2c_polling_write (i2c, buf, 9, ROCKET_MOTOR_I2C_ADDRESS);
 	}
+	
+	// update Antennae
+	antenna_update();
+
  }
 
 /*
  * rocket_position_send : send the motor positions
+ * NOTE: actual move defered until explicit rocket_command_send()
  *
  */
 
@@ -533,6 +541,7 @@ void rocket_position_send ()
 	buf[7]=(uint8_t) ((r_towers[ROCKET_TOWER_SE].step_count & 0x00ff00L) >> 8);
 	buf[8]=(uint8_t) ((r_towers[ROCKET_TOWER_SE].step_count & 0x0000ffL)     );
 	i2c_polling_write (i2c, buf, 9, ROCKET_MOTOR_I2C_ADDRESS);
+
  }
 
 /*
