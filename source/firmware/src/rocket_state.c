@@ -643,8 +643,10 @@ static void S_Main_GoHome_enter () {
 static void S_Main_Menu_enter () {
 	send_Sound(SOUND_ATTRACT);
 	send_NeoPixel(NEOPIXEL_ATTRACT);
-	groveLcdClear(i2c);
+	//groveLcdClear(i2c);
+	groveLcdInit(i2c);
 }
+
 
 static uint32_t panic_timer=0L;
 
@@ -1100,11 +1102,11 @@ static void S_Test_Simulation_Steps_loop () {
 
 /**** TEST PAN/TILT ********************************************************/
 
-static int32_t antennae_number=0;
-static int32_t antennae_pan=(PAN_MID)*4;
-static int32_t antennae_tilt=(PAN_MID)*4;
+static int32_t antenna_number=0;
+static int32_t antenna_pan=(PAN_MID)*4;
+static int32_t antenna_tilt=(PAN_MID)*4;
 static void S_Test_Antennae_Select_enter () {
-	antennae_number=0;
+	antenna_number=0;
 	jump_state("S_Test_Antennae_Go");
 }
 static void S_Test_Antennae_enter () {
@@ -1114,19 +1116,19 @@ static void S_Test_Antennae_loop () {
 	static int32_t value_z_prev=0;
 
 	// map 0..1023 to 0..255, centered on joystick middle value
-	if (0 == antennae_number) {
-		antennae_pan = r_control.analog_z/4;
+	if (0 == antenna_number) {
+		antenna_pan = r_control.analog_z/4;
 	} else {
-		antennae_tilt = r_control.analog_z/4;
+		antenna_tilt = r_control.analog_z/4;
 	}
 
 	// pass Z to current motor's speed
 	if (4 < abs(value_z_prev-r_control.analog_z)) {
 		sprintf(buffer,"[%c] Pan=%0x,Tilt=%0x, Z=%04d\n",
-			(0 == antennae_number) ? 'P':'T',
-			antennae_pan,antennae_tilt,r_control.analog_z);
+			(0 == antenna_number) ? 'P':'T',
+			antenna_pan,antenna_tilt,r_control.analog_z);
 		log(buffer);
-		send_Pan_Tilt(antennae_pan,antennae_tilt);
+		send_Pan_Tilt(antenna_pan,antenna_tilt);
 		value_z_prev = r_control.analog_z;
 	}
 }
@@ -1134,9 +1136,9 @@ static void S_Test_Antennae_exit () {
 	// stop current PWM
 }
 static void S_Test_Antennae_Next_enter () {
-	antennae_number++;
-	if (antennae_number>1)
-		antennae_number=0;
+	antenna_number++;
+	if (antenna_number>1)
+		antenna_number=0;
 	jump_state("S_Test_Antennae_Go");
 }
 
@@ -1379,10 +1381,12 @@ static void S_Test_Sanity_Base_enter () {
 
 static void S_Test_Sanity_State_enter () {
 	int32_t i,j;
+	int32_t state_now_orig;
 	bool state_is_called;
 
 	// set the state table self test flag
 	self_test=true;
+	state_now_orig = state_now;
 
 	PRINT("\n=== Self Test: State table =%d of %d ===\n",StateGuiCount,StateGuiMax);
 
@@ -1431,8 +1435,37 @@ static void S_Test_Sanity_State_enter () {
 	self_test=false;
 
 	// explicitly force the next state, because of the state tests above
-	next_state("S_Test_Sanity_Positions_Select");
+	//next_state("S_Test_Sanity_Positions_Select");
+	state_now = state_now_orig;
 }
+
+static void S_Test_Sanity_Antennae_enter () {
+	int32_t rocket_goal_x_orig = r_space.rocket_goal_x;
+	int32_t rocket_goal_y_orig = r_space.rocket_goal_y;
+	int32_t rocket_goal_z_orig = r_space.rocket_goal_z;
+
+	r_space.rocket_goal_x = X_POS_MIN;
+	r_space.rocket_goal_y = Y_POS_MAX;
+	for (r_space.rocket_goal_z=0L;r_space.rocket_goal_z<=Z_POS_MAX;r_space.rocket_goal_z += (Z_POS_MAX/4)) {
+		antenna_update();
+	}
+	r_space.rocket_goal_x = (X_POS_MAX-X_POS_MIN)/2L;
+	r_space.rocket_goal_y = Y_POS_MAX;
+	for (r_space.rocket_goal_z=0L;r_space.rocket_goal_z<=Z_POS_MAX;r_space.rocket_goal_z += (Z_POS_MAX/4)) {
+		antenna_update();
+	}
+	r_space.rocket_goal_x = X_POS_MAX;
+	r_space.rocket_goal_y = Y_POS_MAX;
+	for (r_space.rocket_goal_z=0L;r_space.rocket_goal_z<=Z_POS_MAX;r_space.rocket_goal_z += (Z_POS_MAX/4)) {
+		antenna_update();
+	}
+
+	// finally, reset game defaults
+	r_space.rocket_goal_x = rocket_goal_x_orig;
+	r_space.rocket_goal_y = rocket_goal_y_orig;
+	r_space.rocket_goal_z = rocket_goal_z_orig;
+}
+
 
 static void S_Test_Sanity_Positions_enter () {
 	int32_t i;
@@ -1619,45 +1652,49 @@ int16_t name_pos = 0;
 char high_name[9] = "         ";
 
 void S_Name_enter () {
-	if(name_pos > 0 ){
-		name_pos = 0;
-	} else {
-	 	strcpy(high_name, "ROCKET   ");
-		sprintf(buffer,"Name:  %s",high_name);
-		set_lcd_display(LCD_BUFFER_1,buffer);
-		display_state();
-	}
+	name_pos = 0;
+ 	strcpy(high_name, "ROCKET   ");
+	sprintf(buffer,"Name:  %s",high_name);
+	set_lcd_display(LCD_BUFFER_1,buffer);
+	display_state();
 
+	// turn on the cursor control display
+	groveLcdCursorSet(i2c,0,name_pos+7);
+	groveLcdCursor(i2c,1);
+	groveLcdBlink(i2c,1);
+	
 	goto_state("S_Enter_Name");
 }
 
 void S_Name_Char_enter () {
 	// increment character at curent position
-	printf("Hello 1 POS:name_pos %d\n", name_pos);
-
-	high_name[name_pos]++;
-	sprintf(buffer,"Name:  %s",high_name);
-	set_lcd_display(LCD_BUFFER_1,buffer);
-	display_state();
-
+	if      ('Z' == high_name[name_pos]) high_name[name_pos] = ' ';
+	else if (' ' == high_name[name_pos]) high_name[name_pos] = 'A';
+	else                                 high_name[name_pos]++;
+//	sprintf(buffer,"Name:  %s",high_name);
+//	set_lcd_display(LCD_BUFFER_1,buffer);
+//	display_state();
+	groveLcdPrint(i2c, 0, name_pos+7, &high_name[name_pos], 1);
+ 	groveLcdCursorSet(i2c,0,name_pos+7);
+                   
 	goto_state ("S_Enter_Name");
-
 }
 
 void S_Name_Next_enter () {
-	printf("Hello 2 POS:name_pos %d\n", name_pos);
-
 	name_pos++;
-	if(8 < name_pos){
-		printf("Hello 3 Should Clear the menus\n");
+	if (8 < name_pos) {
 		goto_state("S_High_Score_Show");
-
 	} else{
-		goto_state ("S_Enter_Name");
+		groveLcdCursorSet (i2c,0,name_pos+7);
+		goto_state("S_Enter_Name");
 	}
 }
 
 void S_High_Score_Done () {
+
+	// turn off the cursor control display
+	groveLcdCursor(i2c,0);
+	groveLcdBlink(i2c,0);
 
 	strcpy(highest_name,high_name);
 	printf("High Score Name is: %s\n", high_name);
@@ -1667,6 +1704,7 @@ void S_High_Score_Done () {
 	if (IO_WINNING_SCORE) {
 		sprintf(buffer,"a2e:name=%s,score=%d;",high_name,highest_score);
 		send_high_score(buffer);
+		printf("High Score msg: %s\n", buffer);
 	}
 
 	name_pos = 0;
@@ -1820,6 +1858,8 @@ void state_callback(char *call_name) {
 		if (!self_test) S_Test_Sanity_Base_enter();
 	} else if (0 == strcmp("S_Test_Sanity_State_enter",call_name)) {
 		if (!self_test) S_Test_Sanity_State_enter();
+	} else if (0 == strcmp("S_Test_Sanity_Antennae_enter",call_name)) {
+		if (!self_test) S_Test_Sanity_Antennae_enter();
 	} else if (0 == strcmp("S_Test_Sanity_Positions_enter",call_name)) {
 		if (!self_test) S_Test_Sanity_Positions_enter();
 	} else if (0 == strcmp("S_Test_Sanity_Tables_enter",call_name)) {
@@ -2409,8 +2449,17 @@ void init_state () {
 		 "Sanity     State",
 	//	 "1234567890123456",
 		 "Main        Next",
-		 "S_Main_Menu","S_Test_Sanity_Positions_Select",
+		 "S_Main_Menu","S_Test_Sanity_Antennae_Select",
 		 "S_Test_Sanity_State_enter",ACTION_NOP,ACTION_NOP);
+
+		StateGuiAdd("S_Test_Sanity_Antennae_Select",
+		 STATE_NO_FLAGS,
+		 "Sanity Antennae",
+	//	 "1234567890123456",
+		 "Main        Next",
+		 "S_Main_Menu","S_Test_Sanity_Positions_Select",
+		 "S_Test_Sanity_Antennae_enter",ACTION_NOP,ACTION_NOP);
+
 
 		StateGuiAdd("S_Test_Sanity_Positions_Select",
 		 STATE_NO_FLAGS,
@@ -2440,46 +2489,38 @@ void init_state () {
 		 STATE_NO_FLAGS,
 		 "Name:           ",
 	//	 "1234567890123456",
-		 "Char        Next",
+		 "Char+  Position+",
 		 STATE_NOP, STATE_NOP,
 		 "S_Name_enter",ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Enter_Name",
-		 STATE_NO_FLAGS,
+		 STATE_NO_DISPLAY,
 		 "",
-		 //"",
-		 "Char        Next",
+		 "",
 		 "S_Name_Char","S_Name_Next",
 		 ACTION_NOP,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Name_Char",
-		 STATE_NO_FLAGS,
+		 STATE_NO_DISPLAY,
 		 "",
 		 "",
 		 STATE_NOP, STATE_NOP,
 		 "S_Name_Char_enter",ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Name_Next",
-		 STATE_NO_FLAGS,
+		 STATE_NO_DISPLAY,
 		 "",
 		 "",
 		 STATE_NOP, STATE_NOP,
 		 "S_Name_Next_enter",ACTION_NOP,ACTION_NOP);
 
-		// Why is it going straight to done?
 		StateGuiAdd("S_High_Score_Show",
 		 STATE_NO_FLAGS,
 		 "",
-		 "Done        Edit",
-		 "S_High_Score_Done", "S_Name_Edit",
+	//	 "1234567890123456",
+		 "Re-Edit     Done",
+		 "S_Name_Select", "S_High_Score_Done",
 		 ACTION_NOP,ACTION_NOP,ACTION_NOP);
-
-	 	StateGuiAdd("S_Name_Edit",
-		 STATE_NO_FLAGS,
-		 "",
-		 "Char        Next",
-		 STATE_NOP, STATE_NOP,
-		 "S_Name_enter",ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_High_Score_Done",
 		 STATE_NO_FLAGS,
