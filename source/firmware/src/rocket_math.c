@@ -620,11 +620,11 @@ double degrees2sine(int16_t degrees) {
 int16_t atan2degrees(double x, double y) {
 	double value;
 
-	if (x < 0.0001) x = 0.0001;
-	value = y/x;
+	// protect against division by zero
+	if (y < 0.0001) y = 0.0001;
+	value = x/y;
 
-	if (value < -14.300666) return(-90);
-	if (value >  14.300666) return( 90);
+	if (value < tan_table[0].value) return(-89);
 
 	for (int i=0;i<MATH_ATAN_MAX;i++) {
 		if (value < tan_table[i+1].value) {
@@ -633,7 +633,8 @@ int16_t atan2degrees(double x, double y) {
 			return ((int16_t) ((degree_part * value_scale) + tan_table[i].degrees+ 0.5));
 		}
 	}
-	return(0);
+
+	return (89);
 };
 
 
@@ -887,5 +888,88 @@ void flight_circular_loop () {
 	if (!self_test) {
 		compute_rocket_cable_lengths();
 		move_rocket_next_position();
+	}
+}
+
+/*
+ * Antenna control
+ *
+ */
+
+struct PWM_DEGREES_TABLE {
+	int16_t degrees;
+	uint16_t value;
+};
+
+#define MATH_PAN_MAX 2
+
+struct PWM_DEGREES_TABLE pan_table[MATH_PAN_MAX] = {
+  { -90, (518/4)},
+  {  90, (165/4)},
+};
+
+#define MATH_TILT_MAX 3
+
+struct PWM_DEGREES_TABLE tilt_table[MATH_TILT_MAX] = {
+  { -45, (497/4)},
+  {   0, (401/4)},
+  {  90, (215/4)},
+};
+
+
+uint16_t pan_degrees2pwm(int16_t degrees) {
+	if (degrees < pan_table[0].degrees)
+		return pan_table[0].value;
+	for (int i=0;i<MATH_PAN_MAX;i++) {
+		if (degrees < pan_table[i+1].degrees) {
+			int16_t result;
+			result  = (degrees - pan_table[i].degrees);
+			result *= (pan_table[i+1].value-pan_table[i].value);
+			result /= (pan_table[i+1].degrees-pan_table[i].degrees);
+			return (result + pan_table[i].value);
+		}
+	}
+	return pan_table[MATH_PAN_MAX-1].value;
+};
+
+uint16_t tilt_degrees2pwm(int16_t degrees) {
+	if (degrees < tilt_table[0].degrees)
+		return tilt_table[0].value;
+	for (int i=0;i<MATH_PAN_MAX;i++) {
+		if (degrees < tilt_table[i+1].degrees) {
+			int16_t result;
+			result  = (degrees - tilt_table[i].degrees);
+			result *= (tilt_table[i+1].value-tilt_table[i].value);
+			result /= (tilt_table[i+1].degrees-tilt_table[i].degrees);
+			return (result + tilt_table[i].value);
+		}
+	}
+	return tilt_table[MATH_PAN_MAX-1].value;
+};
+
+
+void antenna_update() {
+	static uint16_t pan_current=0;
+	static uint16_t tilt_current=0;
+	uint16_t pan_now=0;
+	uint16_t tilt_now=0;
+	double degrees_x,degrees_z;
+
+	degrees_x = atan2degrees((double) (r_space.rocket_goal_x - ANTENNA_X_POS), (double) (r_space.rocket_goal_y - ANTENNA_Y_POS));
+	degrees_z = atan2degrees((double) (r_space.rocket_goal_z - ANTENNA_Z_POS), (double) (r_space.rocket_goal_y - ANTENNA_Y_POS));
+
+	pan_now=pan_degrees2pwm(degrees_x);
+	tilt_now=tilt_degrees2pwm(degrees_z);
+
+	printf("Antennae(%ld,%ld,%ld)=(%f,%f)=(%d,%d)\n",
+		r_space.rocket_goal_x,r_space.rocket_goal_y,r_space.rocket_goal_z,
+		degrees_x,degrees_z,
+		pan_now,tilt_now
+		);
+
+	if (!self_test && IO_TRACKER_FOLLOW_ENABLE && ((pan_current != pan_now) || (tilt_current != tilt_now))) {
+		pan_current=pan_now;
+		tilt_current=tilt_now;
+		send_Pan_Tilt(pan_now,tilt_now);
 	}
 }
