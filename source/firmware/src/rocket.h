@@ -29,7 +29,8 @@ typedef char boolean;
 #define IO_JOYSTICK_ENABLE			true	// enable the joystick for X-Y
 #define IO_LCD_ENABLE 				true	// enable the LCD display
 #define IO_LED_BACKPACK_ENABLE		true	// enable the Adafruit LED i2c backback device
-#define IO_TRACKER_LOCAL_ENABLE		true	// enable the Pan&Tilt 'antenae' device
+#define IO_TRACKER_LOCAL_ENABLE		true	// enable the Pan&Tilt 'antenna' device
+#define IO_TRACKER_FOLLOW_ENABLE	true	// enable the 'antenna' tracking movement
 #define IO_MOTOR_ENABLE				true	// enable the motors
 
 #define IO_REMOTE_ENABLE			true	// enable the sister i2c-slave board
@@ -37,8 +38,8 @@ typedef char boolean;
 #define IO_LEDS_REMOTE_ENABLE		true	// enable the remote LED space lighting
 #define IO_NEO_REMOTE_ENABLE		true	// enable the remote NeoPixels space lighting
 #define IO_SOUND_REMOTE_ENABLE		true	// enable the remote sound effects device
-#define IO_TRACKER_REMOTE_ENABLE	false	// enable the remote Pan&Tilt 'antenae' device
-#define IO_LEDRGB_REMOTE_ENABLE		false	// enable the remote LED_RGB 'antenae status' device
+#define IO_TRACKER_REMOTE_ENABLE	false	// enable the remote Pan&Tilt 'antenna' device
+#define IO_LEDRGB_REMOTE_ENABLE		false	// enable the remote LED_RGB 'antenna status' device
 
 // Debugging
 #define DEBUG_TIMING_ENABLE			true	// enable the timing measurements for QOS
