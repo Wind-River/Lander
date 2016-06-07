@@ -62,7 +62,6 @@ int32_t state_now=0;	// current state
 char * state_next_frame=NULL;	// optional state next loop
 static int32_t  state_prev;	// Previous state name (for pause/resume)
 
-void state_callback(char *call_name);
 static void display_state();
 static int32_t find_state(char *select_state);
 
@@ -72,7 +71,7 @@ char highest_name[20] = "<none>";
 int16_t highest_score = 0;
 
 // Constructor
-static void StateGuiAdd(char *state_name,uint32_t flags,char *display_1,char *display_2,char *k1,char *k2,char *state_enter,char *state_loop,char *state_exit) {
+static void StateGuiAdd(char *state_name,uint32_t flags,char *display_1,char *display_2,char *k1,char *k2,void (*state_enter)(),void (*state_loop)(),void (*state_exit)()) {
 	if (StateGuiCount >= StateGuiMax) {
 		log("ERROR: OUT OF STATE RECORD SPACE");
 		return;
@@ -110,36 +109,59 @@ void set_lcd_display(int32_t line,char *buffer) {
 }
 
 static void display_state() {
+	char *display_1 = state_array[state_now].display_1;
+	char *display_2 = state_array[state_now].display_2;
 
-	sprintf(r_control.lcd_line0,"%-16s",state_array[state_now].display_1);
-	if (STATE_REVERSE_MENUS && (0x0000 == (state_array[state_now].state_flags & STATE_NO_MENU_TEXT))) {
-		// flip the menu labels,
-		// Case 1: two strings separated by spaces (normal)
-		// Case 2: one string on left
-		// Case 3: one string on right
-		// Case 4: one long string
-		// Case 5: no strings, just spaces (e.g. pass through states)
-		uint8_t first_space=0,last_space=15,i;
+	// protect the display length
+	state_array[state_now].display_1[LCD_DISPLAY_POS_MAX]='\0';
+	state_array[state_now].display_2[LCD_DISPLAY_POS_MAX]='\0';
 
-		for (i=0;i<16;i++) buffer[i]=' ';
-		sprintf(&buffer[16],"%-16s",state_array[state_now].display_2);
+	// check if inherited state
+	if (0 == strcmp(STATE_INHERIT_S,display_1))
+		display_1 = state_array[state_prev].display_1;
+	if (0 == strcmp(STATE_INHERIT_S,display_2))
+		display_2 = state_array[state_prev].display_2;
 
-		while ((' ' != buffer[16+first_space]) && (first_space<16)) first_space++;
-		while ((' ' != buffer[16+last_space ]) && (last_space > 0)) last_space--;
-
-		if (first_space > 0)
-			strncpy(&buffer[16-first_space],&buffer[16],first_space);
-
-		if ((last_space < 15) && (last_space >= first_space))
-			strncpy(buffer,&buffer[16+last_space+1],15-last_space);
-
-		if (first_space < last_space)
-			strncpy(&buffer[15-last_space],&buffer[16+first_space],last_space-first_space+1);
-
-		buffer[16]='\0';
-		strcpy(r_control.lcd_line1,buffer);
-	} else {
-		sprintf(r_control.lcd_line1,"%-16s",state_array[state_now].display_2);
+	if (0 < strlen(display_1)) {
+		// pad if not empty
+		sprintf(r_control.lcd_line0,"%-16s",display_1);
+	} else { 
+		display_1[0] = '\0';
+	}
+	
+	if (0 < strlen(display_2))
+		// pad and/or reverse if not empty
+		if (STATE_REVERSE_MENUS) {
+			// flip the menu labels,
+			// Case 1: two strings separated by spaces (normal)
+			// Case 2: one string on left
+			// Case 3: one string on right
+			// Case 4: one long string
+			// Case 5: no strings, just spaces (e.g. pass through states)
+			uint8_t first_space=0,last_space=15,i;
+	
+			for (i=0;i<=32;i++) buffer[i]=' ';
+			sprintf(&buffer[16],"%-16s",display_2);
+	
+			while ((' ' != buffer[16+first_space]) && (first_space<16)) first_space++;
+			while ((' ' != buffer[16+last_space ]) && (last_space > 0)) last_space--;
+	
+			if (first_space > 0)
+				strncpy(&buffer[16-first_space],&buffer[16],first_space);
+	
+			if ((last_space < 15) && (last_space >= first_space))
+				strncpy(buffer,&buffer[16+last_space+1],15-last_space);
+	
+			if (first_space < last_space)
+				strncpy(&buffer[15-last_space],&buffer[16+first_space],last_space-first_space+1);
+	
+			buffer[16]='\0';
+			strcpy(r_control.lcd_line1,buffer);
+		} else {
+			sprintf(r_control.lcd_line1,"%-16s",display_2);
+		}
+	else {
+		display_2[0] = '\0';
 	}
 
 	if (verbose && (0x0000 == (state_array[state_now].state_flags & STATE_NO_VERBOSE))) {
@@ -159,8 +181,8 @@ static void display_state() {
 
 	// Send text to screen
 	if (IO_LCD_ENABLE) {
-		groveLcdPrint(i2c, 0, 0, r_control.lcd_line0, strlen(r_control.lcd_line0));
-		groveLcdPrint(i2c, 1, 0, r_control.lcd_line1, strlen(r_control.lcd_line1));
+		if (strlen(r_control.lcd_line0)) groveLcdPrint(i2c, 0, 0, r_control.lcd_line0, strlen(r_control.lcd_line0));
+		if (strlen(r_control.lcd_line1)) groveLcdPrint(i2c, 1, 0, r_control.lcd_line1, strlen(r_control.lcd_line1));
 	}
 }
 
@@ -181,9 +203,18 @@ static void do_goto_state(char *select_state_name, bool skip_display) {
 	// increment the state depth
 	state_depth++;
 
+	// check if inherited state
+	if (STATE_INHERIT_1 == select_state_name)
+		select_state_name = state_array[state_prev].k1;
+	if (STATE_INHERIT_2 == select_state_name)
+		select_state_name = state_array[state_prev].k2;
+
 	// skip if next state is NOP
 	if (STATE_NOP == select_state_name)
 		return;
+
+	// pre-clear next frame's state to allow inner handler state jumps
+	state_next_frame = NULL;
 
 	// Find state
 	int32_t state_next=find_state(select_state_name);
@@ -196,7 +227,7 @@ static void do_goto_state(char *select_state_name, bool skip_display) {
 
 	// execute any state epilog function
 	if (ACTION_NOP != state_array[state_now].state_exit) {
-		state_callback(state_array[state_now].state_exit);
+		state_array[state_now].state_exit();
 	}
 
 	// assert new state
@@ -208,7 +239,7 @@ static void do_goto_state(char *select_state_name, bool skip_display) {
 	// execute any state prolog function
 	if (ACTION_NOP != state_array[state_now].state_enter) {
 		int32_t expected_state=state_now;
-		state_callback(state_array[state_now].state_enter);
+		state_array[state_now].state_enter();
 		// See if the callback changed the state
 		if (state_now != expected_state) {
 			display_this_state=false;
@@ -327,12 +358,12 @@ static void S_CalibrateHome_Lock_enter  () {
 
 /**** CALIBRATE POSITIONS ********************************************************/
 
-static void S_Calibrate_Position_Enter () {
+static void S_Calibrate_Position_enter () {
 	// init the calibration compass
 	compass_select(COMPASS_INIT,&calibrate_compass);
 }
 
-static void S_Calibrate_Position_Loop () {
+static void S_Calibrate_Position_loop () {
 	// measure against the calibration compass
 	compass_select(COMPASS_CALC_POS,&calibrate_compass);
 	strncpy(&state_array[state_now].display_2[5],calibrate_compass.name,5);
@@ -367,7 +398,7 @@ static void S_Flight_Linear_loop () {
 	} else {
 		flight_linear_loop();
 		sprintf(buffer,"Fly:  %2d/%02d",r_flight.frame_count,r_flight.frame_max);
-		set_lcd_display(LCD_BUFFER_2,buffer);
+		set_lcd_display(LCD_BUFFER_1,buffer);
 		display_state();
 	}
 }
@@ -378,14 +409,14 @@ static int8_t circle_pass=0;
 static int8_t bumblebee_pass=0;
 static int8_t attract_pass=0;
 
-static void S_Calibrate_Circle_Enter () {
+static void S_Calibrate_Circle_enter () {
 	// init the calibration compass
 	compass_select(COMPASS_INIT,&calibrate_compass);
 	circle_pass=0;
 	bumblebee_pass=0;
 }
 
-static void S_Calibrate_Circle_Loop () {
+static void S_Calibrate_Circle_loop () {
 	// measure against the calibration compass
 	compass_select(COMPASS_CALC_CIRC,&calibrate_compass);
 	strncpy(&state_array[state_now].display_2[7],calibrate_compass.name,strlen(calibrate_compass.name));
@@ -509,7 +540,7 @@ static void S_Flight_Circle_loop () {
 	} else {
 		flight_circular_loop();
 		sprintf(buffer,"Circle:  %2d/%02d",r_flight.frame_count,r_flight.frame_max);
-		set_lcd_display(LCD_BUFFER_2,buffer);
+		set_lcd_display(LCD_BUFFER_1,buffer);
 		display_state();
 
 		if (DEBUG_VERBOSE_MOVE) PRINT("Now at:(%6ld,%6ld,%6ld)A(%6ld,%6ld,%6ld)Motors=(%6ld,%6ld,%6ld,%6ld)\n",
@@ -532,7 +563,7 @@ static void S_Flight_Wait_loop () {
 	} else {
 		flight_wait_loop();
 		sprintf(buffer,"Wait:  %2d/%02d",r_flight.frame_count,r_flight.frame_max);
-		set_lcd_display(LCD_BUFFER_2,buffer);
+		set_lcd_display(LCD_BUFFER_1,buffer);
 		display_state();
 	}
 }
@@ -562,6 +593,7 @@ static void S_Attract_Go_loop () {
 		calibrate_compass.name = "Bumble";
 		flight_linear(ROCKET_HOME_X+0,ROCKET_HOME_Y+0,ROCKET_HOME_Z+150000L, MOTOR_SPEED_AUTO);
 		r_flight.state_done="S_Attract_Go";
+		next_state("S_Flight_Linear");
 	} else if ((1 <= attract_pass) && (10 >= attract_pass)) {
 		// run 10 Bumble patterns
 		attract_pass++;
@@ -595,6 +627,53 @@ static void S_Attract_Go_loop () {
 	}
 }
 
+/**** CALIBRATE GROUND ********************************************************/
+
+static void S_Calibrate_Ground_enter () {
+	// init the calibration compass
+	compass_select(COMPASS_INIT,&calibrate_compass);
+	circle_pass=0;
+	bumblebee_pass=0;
+}
+
+static void S_Calibrate_Ground_loop () {
+	// measure against the calibration compass
+	compass_select(COMPASS_CALC_GROUND,&calibrate_compass);
+	strncpy(&state_array[state_now].display_2[7],calibrate_compass.name,strlen(calibrate_compass.name));
+	display_state();
+}
+
+static void S_Calibrate_Ground_Go_enter () {
+	const char *name = calibrate_compass.name;
+	uint8_t i;
+	uint16_t height;
+
+	if (0 == strcmp("Home",name)) {
+		height = 0L;
+		for (i=0;i<ROCKET_GROUND_MAX;i++) {
+			r_ground[i].step_goal = height;
+		}
+		ground_position_send();
+	} else if (0 == strcmp("+05",name)) {
+		height = 5 * GROUND_STEPS_PER_ROTATION;
+		for (i=0;i<ROCKET_GROUND_MAX;i++) {
+			r_ground[i].step_goal = height;
+		}
+		ground_position_send();
+	} else if (0 == strcmp("+10",name)) {
+		height = 10 * GROUND_STEPS_PER_ROTATION;
+		for (i=0;i<ROCKET_GROUND_MAX;i++) {
+			r_ground[i].step_goal = height;
+		}
+		ground_position_send();
+	} else if (0 == strcmp("+20",name)) {
+		height = 20 * GROUND_STEPS_PER_ROTATION;
+		for (i=0;i<ROCKET_GROUND_MAX;i++) {
+			r_ground[i].step_goal = height;
+		}
+		ground_position_send();
+	}
+}
 
 /**** TEST MOTOR STATUS ********************************************************/
 
@@ -651,20 +730,32 @@ static void S_Main_Menu_enter () {
 static uint32_t panic_timer=0L;
 
 static void S_Game_Start_enter () {
+	checkpoint(10100);
+
 	init_game();
+	checkpoint(10101);
 
 	// init the panic timer
 	panic_timer = task_tick_get_32();
 
 	// start the show
 	send_Sound(SOUND_GET_READY);
-	send_NeoPixel(NEOPIXEL_GET_READY);
-	updateLedDisplays();
+	send_NeoPixel(NEOPIXEL_GET_READY); /* this will also preset the speed/height LEDs */
+	checkpoint(10103);
+	/* preset the I2C LED */
+	seg_writeDigitNum(0, 0x0f, 0); /* 'F' */
+	seg_writeDigitNum(1, 0x11, 0); /* 'U' */
+	seg_writeDigitNum(3, 0x0e, 0); /* 'E' */
+	seg_writeDigitNum(4, 0x10, 0); /* 'L' */
+	bp_writeDisplay();
+	checkpoint(10104);
+
 
 	// fly the rocket to game start position
 	flight_linear(r_space.rocket_goal_x,r_space.rocket_goal_y,r_space.rocket_goal_z, MOTOR_SPEED_AUTO);
 	r_flight.state_done="S_Game_Ready";
 	next_state("S_Flight_Linear");
+	checkpoint(10105);
 }
 
 static void S_Game_Ready_enter () {
@@ -677,14 +768,19 @@ static void S_Game_Ready_enter () {
 }
 
 static void S_Game_Play_loop () {
+	checkpoint(10200);
+
 	// compute the rocket position
 	compute_rocket_next_position();
+	checkpoint(10201);
 
 	// compute the tower cable lengths
 	compute_rocket_cable_lengths();
+	checkpoint(10202);
 
 	// Move the tower cables
 	move_rocket_next_position();
+	checkpoint(10203);
 
 	// Landed?
 	if ((GAME_XYZ_FLIGHT != r_game.game) &&
@@ -699,8 +795,8 @@ static void S_Game_Play_loop () {
 	if        (GAME_DISPLAY_RAW_XYZF  == r_game.play_display_mode) {
 		// display the rocket state
 		//	 "1234567890123456",
-		sprintf(state_array[state_now].display_1,"X=%5d  Y=%5d",r_space.rocket_x/1000,r_space.rocket_y/1000);
-		sprintf(state_array[state_now].display_2,"Z=%5d  f=%5d",r_space.rocket_z/1000,r_space.rocket_fuel);
+		sprintf(state_array[state_now].display_1,"X=%5d Y=%5d",r_space.rocket_x/1000,r_space.rocket_y/1000);
+		sprintf(state_array[state_now].display_2,"Z=%5d f=%5d",r_space.rocket_z/1000,r_space.rocket_fuel);
 		display_state();
 	} else if (GAME_DISPLAY_RAW_CABLE == r_game.play_display_mode) {
 		// display the rocket state
@@ -722,19 +818,21 @@ static void S_Game_Play_loop () {
 		set_lcd_display(LCD_BUFFER_2,buffer);
 		display_state();
 	} else {
-		sprintf(buffer,"Z=%02d X=%03d Y=%03d",
+		sprintf(buffer,"XYZ=%02d,%03d,%03d",
 			r_space.rocket_z/1000 /*SCALE_GAME_UMETER_TO_MOON_CMETER*/,
 			r_space.rocket_x/1000 /*SCALE_GAME_UMETER_TO_MOON_CMETER*/,
 			r_space.rocket_y/1000 /*SCALE_GAME_UMETER_TO_MOON_CMETER*/
 			);
 		set_lcd_display(LCD_BUFFER_1,buffer);
-		sprintf(buffer,"S=%05d F=%04d",r_space.rocket_delta_z,r_space.rocket_fuel);
+		sprintf(buffer,"S=%05d F=%04d",r_space.rocket_delta_z/1000,r_space.rocket_fuel);
 		set_lcd_display(LCD_BUFFER_2,buffer);
 		display_state();
 	}
+	checkpoint(10204);
 
 	// update the displays
 	updateLedDisplays();
+	checkpoint(10205);
 }
 
 int32_t win_timeout = 0L;
@@ -1400,11 +1498,6 @@ static void S_Test_Sanity_State_enter () {
 				PRINT("MISSING STATE_K2: %s (from %s)\n",state_array[i].k2,state_array[i].state_name);
 			}
 
-		// check state callbacks
-		state_callback(state_array[i].state_enter);
-		state_callback(state_array[i].state_loop);
-		state_callback(state_array[i].state_exit);
-
 		// check that this state is called by someone
 		state_is_called=false;
 		for (j=0;j<StateGuiCount;j++) {
@@ -1662,7 +1755,7 @@ void S_Name_enter () {
 	groveLcdCursorSet(i2c,0,name_pos+7);
 	groveLcdCursor(i2c,1);
 	groveLcdBlink(i2c,1);
-	
+
 	goto_state("S_Enter_Name");
 }
 
@@ -1676,7 +1769,7 @@ void S_Name_Char_enter () {
 //	display_state();
 	groveLcdPrint(i2c, 0, name_pos+7, &high_name[name_pos], 1);
  	groveLcdCursorSet(i2c,0,name_pos+7);
-                   
+
 	goto_state ("S_Enter_Name");
 }
 
@@ -1690,7 +1783,7 @@ void S_Name_Next_enter () {
 	}
 }
 
-void S_High_Score_Done () {
+void S_High_Score_enter () {
 
 	// turn off the cursor control display
 	groveLcdCursor(i2c,0);
@@ -1722,206 +1815,6 @@ void S_Shutdown_enter () {
 	next_state("S_Flight_Linear");
 }
 
-
-/*
- * state_callback: do explicit calls and not via function pointers to avoid Cloud9 debugger crashes
- *                 NOTE: do not actually execute call if in state table self_test mode
- *
- */
-
-void state_callback(char *call_name) {
-	if      (ACTION_NOP == call_name) {
-		return;
-
-	} else if (0 == strcmp("S_Main_GoHome_enter",call_name)) {
-		if (!self_test) S_Main_GoHome_enter();
-	} else if (0 == strcmp("S_Main_Menu_enter",call_name)) {
-		if (!self_test) S_Main_Menu_enter();
-
-	} else if (0 == strcmp("S_Calibrate_Init_enter",call_name)) {
-		if (!self_test) S_Calibrate_Init_enter();
-	} else if (0 == strcmp("S_CalibrateHome_loop",call_name)) {
-		if (!self_test) S_CalibrateHome_loop();
-	} else if (0 == strcmp("S_CalibrateHome_Done_enter",call_name)) {
-		if (!self_test) S_CalibrateHome_Done_enter();
-	} else if (0 == strcmp("S_CalibrateHome_Lock_enter",call_name)) {
-		if (!self_test) S_CalibrateHome_Lock_enter();
-	} else if (0 == strcmp("S_Calibrate_Position_Enter",call_name)) {
-		if (!self_test) S_Calibrate_Position_Enter();
-	} else if (0 == strcmp("S_Calibrate_Position_Loop",call_name)) {
-		if (!self_test) S_Calibrate_Position_Loop();
-	} else if (0 == strcmp("S_Calibrate_Position_Go_enter",call_name)) {
-		if (!self_test) S_Calibrate_Position_Go_enter();
-	} else if (0 == strcmp("S_Calibrate_Circle_Enter",call_name)) {
-		if (!self_test) S_Calibrate_Circle_Enter();
-	} else if (0 == strcmp("S_Calibrate_Circle_Loop",call_name)) {
-		if (!self_test) S_Calibrate_Circle_Loop();
-	} else if (0 == strcmp("S_Calibrate_Circle_Go_enter",call_name)) {
-		if (!self_test) S_Calibrate_Circle_Go_enter();
-	} else if (0 == strcmp("S_Calibrate_BumbleBee_Go_enter",call_name)) {
-		if (!self_test) S_Calibrate_BumbleBee_Go_enter();
-
-	} else if (0 == strcmp("S_Flight_Linear_loop",call_name)) {
-		if (!self_test) S_Flight_Linear_loop();
-	} else if (0 == strcmp("S_Flight_Circle_loop",call_name)) {
-		if (!self_test) S_Flight_Circle_loop();
-	} else if (0 == strcmp("S_Flight_Wait_loop",call_name)) {
-		if (!self_test) S_Flight_Wait_loop();
-	} else if (0 == strcmp("S_Attract_Select_enter",call_name)) {
-		if (!self_test) S_Attract_Select_enter();
-	} else if (0 == strcmp("S_Attract_Go_loop",call_name)) {
-		if (!self_test) S_Attract_Go_loop();
-
-	} else if (0 == strcmp("S_Test_Motor_Status_loop",call_name)) {
-		if (!self_test) S_Test_Motor_Status_loop();
-
-	} else if (0 == strcmp("S_Game_Start_enter",call_name)) {
-		if (!self_test) S_Game_Start_enter();
-	} else if (0 == strcmp("S_Game_Ready_enter",call_name)) {
-		if (!self_test) S_Game_Ready_enter();
-	} else if (0 == strcmp("S_Game_Play_loop",call_name)) {
-		if (!self_test) S_Game_Play_loop();
-	} else if (0 == strcmp("S_Game_Panic_enter",call_name)) {
-		if (!self_test) S_Game_Panic_enter();
-	} else if (0 == strcmp("S_Game_Done_enter",call_name)) {
-		if (!self_test) S_Game_Done_enter();
-	} else if (0 == strcmp("S_Game_Done_loop",call_name)) {
-		if (!self_test) S_Game_Done_loop();
-	} else if (0 == strcmp("S_Game_Display_Next_enter",call_name)) {
-		if (!self_test) S_Game_Display_Next_enter();
-
-	} else if (0 == strcmp("S_Opt_Game_Z_Enter",call_name)) {
-		if (!self_test) S_Opt_Game_Z_Enter();
-	} else if (0 == strcmp("S_Opt_Game_XYZ_Enter",call_name)) {
-		if (!self_test) S_Opt_Game_XYZ_Enter();
-	} else if (0 == strcmp("S_Opt_Game_Flight_Enter",call_name)) {
-		if (!self_test) S_Opt_Game_Flight_Enter();
-	} else if (0 == strcmp("S_Opt_Game_Move_Enter",call_name)) {
-		if (!self_test) S_Opt_Game_Move_Enter();
-	} else if (0 == strcmp("S_Opt_Game_Auto_Enter",call_name)) {
-		if (!self_test) S_Opt_Game_Auto_Enter();
-
-	} else if (0 == strcmp("S_Opt_Gravity_Full_Enter",call_name)) {
-		if (!self_test) S_Opt_Gravity_Full_Enter();
-	} else if (0 == strcmp("S_Opt_Gravity_High_Enter",call_name)) {
-		if (!self_test) S_Opt_Gravity_High_Enter();
-	} else if (0 == strcmp("S_Opt_Gravity_None_Enter",call_name)) {
-		if (!self_test) S_Opt_Gravity_None_Enter();
-	} else if (0 == strcmp("S_Opt_Gravity_Negative_Enter",call_name)) {
-		if (!self_test) S_Opt_Gravity_Negative_Enter();
-
-	} else if (0 == strcmp("S_Opt_Fuel_Normal_Enter",call_name)) {
-		if (!self_test) S_Opt_Fuel_Normal_Enter();
-	} else if (0 == strcmp("S_Opt_Fuel_Low_Enter",call_name)) {
-		if (!self_test) S_Opt_Fuel_Low_Enter();
-	} else if (0 == strcmp("S_Opt_Fuel_Nolimit_Enter",call_name)) {
-		if (!self_test) S_Opt_Fuel_Nolimit_Enter();
-
-	} else if (0 == strcmp("S_Opt_Pos_Center_Enter",call_name)) {
-		if (!self_test) S_Opt_Pos_Center_Enter();
-	} else if (0 == strcmp("S_Opt_Pos_Random_Enter",call_name)) {
-		if (!self_test) S_Opt_Pos_Random_Enter();
-
-	} else if (0 == strcmp("S_Test_I2C_enter",call_name)) {
-		if (!self_test) S_Test_I2C_enter();
-
-	} else if (0 == strcmp("S_Test_Segment_Open_enter",call_name)) {
-		if (!self_test) S_Test_Segment_Open_enter();
-	} else if (0 == strcmp("S_Test_Segment_enter",call_name)) {
-		if (!self_test) S_Test_Segment_enter();
-
-	} else if (0 == strcmp("S_IO_STATE_loop",call_name)) {
-		if (!self_test) S_IO_STATE_loop();
-	} else if (0 == strcmp("S_Test_enter",call_name)) {
-		if (!self_test) S_Test_enter();
-
-	} else if (0 == strcmp("S_Test_Simulation_Meters_enter",call_name)) {
-		if (!self_test) S_Test_Simulation_Meters_enter();
-	} else if (0 == strcmp("S_Test_Simulation_MicroMeters_loop",call_name)) {
-		if (!self_test) S_Test_Simulation_MicroMeters_loop();
-	} else if (0 == strcmp("S_Test_Simulation_MilliMeters_loop",call_name)) {
-		if (!self_test) S_Test_Simulation_MilliMeters_loop();
-	} else if (0 == strcmp("S_Test_Simulation_Cables_enter",call_name)) {
-		if (!self_test) S_Test_Simulation_Cables_enter();
-	} else if (0 == strcmp("S_Test_Simulation_Cables_loop",call_name)) {
-		if (!self_test) S_Test_Simulation_Cables_loop();
-	} else if (0 == strcmp("S_Test_Simulation_Steps_enter",call_name)) {
-		if (!self_test) S_Test_Simulation_Steps_enter();
-	} else if (0 == strcmp("S_Test_Simulation_Steps_loop",call_name)) {
-		if (!self_test) S_Test_Simulation_Steps_loop();
-	} else if (0 == strcmp("do_Simulation_Pause_enter",call_name)) {
-		do_Simulation_Pause_enter();
-	} else if (0 == strcmp("do_Simulation_Resume_enter",call_name)) {
-		do_Simulation_Resume_enter();
-
-	} else if (0 == strcmp("S_Test_Sanity_Base_enter",call_name)) {
-		if (!self_test) S_Test_Sanity_Base_enter();
-	} else if (0 == strcmp("S_Test_Sanity_State_enter",call_name)) {
-		if (!self_test) S_Test_Sanity_State_enter();
-	} else if (0 == strcmp("S_Test_Sanity_Antennae_enter",call_name)) {
-		if (!self_test) S_Test_Sanity_Antennae_enter();
-	} else if (0 == strcmp("S_Test_Sanity_Positions_enter",call_name)) {
-		if (!self_test) S_Test_Sanity_Positions_enter();
-	} else if (0 == strcmp("S_Test_Sanity_Tables_enter",call_name)) {
-		if (!self_test) S_Test_Sanity_Tables_enter();
-
-	} else if (0 == strcmp("S_Test_Antennae_Select_enter",call_name)) {
-		if (!self_test) S_Test_Antennae_Select_enter();
-	} else if (0 == strcmp("S_Test_Antennae_enter",call_name)) {
-		if (!self_test) S_Test_Antennae_enter();
-	} else if (0 == strcmp("S_Test_Antennae_loop",call_name)) {
-		if (!self_test) S_Test_Antennae_loop();
-	} else if (0 == strcmp("S_Test_Antennae_exit",call_name)) {
-		if (!self_test) S_Test_Antennae_exit();
-	} else if (0 == strcmp("S_Test_Antennae_Next_enter",call_name)) {
-		if (!self_test) S_Test_Antennae_Next_enter();
-
-	} else if (0 == strcmp("S_Test_LedRgb_enter",call_name)) {
-		if (!self_test) S_Test_LedRgb_enter();
-	} else if (0 == strcmp("S_Test_LedRgb_loop",call_name)) {
-		if (!self_test) S_Test_LedRgb_loop();
-	} else if (0 == strcmp("S_Test_LedRgb_exit",call_name)) {
-		if (!self_test) S_Test_LedRgb_exit();
-
-	} else if (0 == strcmp("S_TestMotor_NextSet_enter",call_name)) {
-		if (!self_test) S_TestMotor_NextSet_enter();
-	} else if (0 == strcmp("S_TestMotor_NextSet_Done_enter",call_name)) {
-		if (!self_test) S_TestMotor_NextSet_Done_enter();
-	} else if (0 == strcmp("S_TestMotor_PlusStep_enter",call_name)) {
-		if (!self_test) S_TestMotor_PlusStep_enter();
-	} else if (0 == strcmp("S_TestMotor_MinusStep_enter",call_name)) {
-		if (!self_test) S_TestMotor_MinusStep_enter();
-	} else if (0 == strcmp("S_TestMotor_Plus360_enter",call_name)) {
-		if (!self_test) S_TestMotor_Plus360_enter();
-	} else if (0 == strcmp("S_TestMotor_Minus360_enter",call_name)) {
-		if (!self_test) S_TestMotor_Minus360_enter();
-
-	} else if (0 == strcmp("S_Test_Sound_Select_enter",call_name)) {
-		if (!self_test) S_Test_Sound_Select_enter();
-	} else if (0 == strcmp("S_Test_Sound_enter",call_name)) {
-		if (!self_test) S_Test_Sound_enter();
-	} else if (0 == strcmp("S_Test_Sound_loop",call_name)) {
-		if (!self_test) S_Test_Sound_loop();
-	} else if (0 == strcmp("S_Test_Sound_exit",call_name)) {
-		if (!self_test) S_Test_Sound_exit();
-	} else if (0 == strcmp("S_Test_Sound_Next_enter",call_name)) {
-		if (!self_test) S_Test_Sound_Next_enter();
-
-	} else if (0 == strcmp("S_Name_enter",call_name)) {
-		if (!self_test) S_Name_enter();
-	} else if (0 == strcmp("S_Name_Char_enter",call_name)) {
-		if (!self_test) S_Name_Char_enter();
-	} else if (0 == strcmp("S_Name_Next_enter",call_name)) {
-		if (!self_test) S_Name_Next_enter();
-	} else if (0 == strcmp("S_High_Score_Done",call_name)) {
-		if (!self_test) S_High_Score_Done();
-
-	} else if (0 == strcmp("S_Shutdown_enter",call_name)) {
-		if (!self_test) S_Shutdown_enter();
-
-	} else log_val("ERROR: MISSING_CALLBACK='%s'\n",call_name);
-
-}
 
 /*
  * init_state - instantiate the state table
@@ -1962,14 +1855,14 @@ void init_state () {
 		 "",
 		 "",
 		 STATE_NOP,STATE_NOP,
-		 "S_CalibrateHome_Done_enter",ACTION_NOP,ACTION_NOP);
+		 S_CalibrateHome_Done_enter,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Calibrate_Home_Select",
 		 STATE_NO_VERBOSE,
 		 "",
 		 "",
 		 STATE_NOP,STATE_NOP,
-		 "S_Calibrate_Init_enter",ACTION_NOP,ACTION_NOP);
+		 S_Calibrate_Init_enter,ACTION_NOP,ACTION_NOP);
 
 			StateGuiAdd("S_Calibrate_Home",
 			 STATE_NO_VERBOSE|STATE_FROM_CALLBACK,
@@ -1977,29 +1870,29 @@ void init_state () {
 		//	 "1234567890123456",
 			 "Done    (Un)Lock",
 			 "S_CalibrateHome_Done","S_CalibrateHome_Lock",
-			 ACTION_NOP,"S_CalibrateHome_loop",ACTION_NOP);
+			 ACTION_NOP,S_CalibrateHome_loop,ACTION_NOP);
 
 				StateGuiAdd("S_CalibrateHome_Done",
 				 STATE_NO_FLAGS,
 				 "",
 				 "",
 				 STATE_NOP,STATE_NOP,
-				 "S_CalibrateHome_Done_enter",ACTION_NOP,ACTION_NOP);
+				 S_CalibrateHome_Done_enter,ACTION_NOP,ACTION_NOP);
 
 				StateGuiAdd("S_CalibrateHome_Lock",
 				 STATE_NO_VERBOSE,
 				 "",
 				 "",
 				 STATE_NOP,STATE_NOP,
-				 "S_CalibrateHome_Lock_enter",ACTION_NOP,ACTION_NOP);
+				 S_CalibrateHome_Lock_enter,ACTION_NOP,ACTION_NOP);
 
 	StateGuiAdd("S_Main_GoHome",
-	 STATE_NO_MENU_TEXT,
+	 STATE_NO_FLAGS,
 	 " Rocket Lander! ",
 //	 "1234567890123456",
 	 "   Fly Home!",
 	 "S_Main_Menu","S_Main_Menu",
-	 "S_Main_GoHome_enter",ACTION_NOP,ACTION_NOP);
+	 S_Main_GoHome_enter,ACTION_NOP,ACTION_NOP);
 
 
 	StateGuiAdd("S_Main_Menu",
@@ -2008,35 +1901,35 @@ void init_state () {
 //	 "1234567890123456",
 	 "Next       Play!",
 	 "S_Main_Attract","S_Game_Start",
-	 "S_Main_Menu_enter",ACTION_NOP,ACTION_NOP);
+	 S_Main_Menu_enter,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Game_Start",
 		 STATE_NO_VERBOSE,
 		 "Move to start...",
 		 "Cancel          ",
 		 "S_Game_Done",STATE_NOP,
-		 "S_Game_Start_enter",ACTION_NOP,ACTION_NOP);
+		 S_Game_Start_enter,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Game_Ready",
 		 STATE_FROM_CALLBACK,
 		 "",
 		 "",
 		 STATE_NOP,STATE_NOP,
-		 "S_Game_Ready_enter",ACTION_NOP,ACTION_NOP);
+		 S_Game_Ready_enter,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Game_Play",
-		 STATE_NO_VERBOSE|STATE_FROM_CALLBACK|STATE_NO_MENU_TEXT,
+		 STATE_NO_VERBOSE|STATE_FROM_CALLBACK,
 		 "",
 		 "",
 		 "S_Game_Panic","S_Game_Display_Next",
-		 STATE_NOP,"S_Game_Play_loop",ACTION_NOP);
+		 STATE_NOP,S_Game_Play_loop,ACTION_NOP);
 
 			StateGuiAdd("S_Game_Display_Next",
 			 STATE_NO_VERBOSE,
 			 "",
 			 "",
 			 STATE_NOP,STATE_NOP,
-			 "S_Game_Display_Next_enter",ACTION_NOP,ACTION_NOP);
+			 S_Game_Display_Next_enter,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Game_Done",
 		 STATE_FROM_CALLBACK,
@@ -2044,14 +1937,14 @@ void init_state () {
 	//	 "1234567890123456",
 		 "Main      Replay",
 		 "S_Main_GoHome","S_Game_Start",
-		 "S_Game_Done_enter","S_Game_Done_loop",ACTION_NOP);
+		 S_Game_Done_enter,S_Game_Done_loop,ACTION_NOP);
 
 		StateGuiAdd("S_Game_Panic",
-		 STATE_NO_VERBOSE|STATE_NO_MENU_TEXT,
+		 STATE_NO_VERBOSE,
 		 "",
 		 "",
          STATE_NOP,STATE_NOP,
-		 "S_Game_Panic_enter",ACTION_NOP,ACTION_NOP);
+		 S_Game_Panic_enter,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Game_Stop",
 		 STATE_NO_FLAGS,
@@ -2105,7 +1998,7 @@ void init_state () {
 	//	 "1234567890123456",
 		 "Cancel          ",
 		"S_Shutdown_Done", STATE_NOP,
-		 "S_Shutdown_enter",ACTION_NOP,ACTION_NOP);
+		 S_Shutdown_enter,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Shutdown_Done",
 		 STATE_FROM_CALLBACK,
@@ -2123,15 +2016,15 @@ void init_state () {
 	 "",
 	 "",
 	 STATE_NOP,STATE_NOP,
-	 "S_Attract_Select_enter",ACTION_NOP,ACTION_NOP);
+	 S_Attract_Select_enter,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Attract_Go",
 		 STATE_NO_VERBOSE|STATE_FROM_CALLBACK,
 		 "Attract Mode ...",
 	//	 "1234567890123456",
-		 "Main        Main",
-		 "S_Main_GoHome","S_Main_GoHome",
-		 ACTION_NOP,"S_Attract_Go_loop",ACTION_NOP);
+		 "Main        Play",
+		 "S_Main_GoHome","S_Game_Start",
+		 ACTION_NOP,S_Attract_Go_loop,ACTION_NOP);
 
 // TOP: Options
 
@@ -2156,7 +2049,7 @@ void init_state () {
 			 "",
 			 "",
 			 STATE_NOP,STATE_NOP,
-			 "S_Opt_Game_Z_Enter",ACTION_NOP,ACTION_NOP);
+			 S_Opt_Game_Z_Enter,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Opt_Game_XYZ",
 		 STATE_NO_FLAGS,
@@ -2171,7 +2064,7 @@ void init_state () {
 			 "",
 			 "",
 			 STATE_NOP,STATE_NOP,
-			 "S_Opt_Game_XYZ_Enter",ACTION_NOP,ACTION_NOP);
+			 S_Opt_Game_XYZ_Enter,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Opt_Game_Flight",
 		 STATE_NO_FLAGS,
@@ -2186,7 +2079,7 @@ void init_state () {
 			 "",
 			 "",
 			 STATE_NOP,STATE_NOP,
-			 "S_Opt_Game_Flight_Enter",ACTION_NOP,ACTION_NOP);
+			 S_Opt_Game_Flight_Enter,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Opt_Game_Move",
 		 STATE_NO_FLAGS,
@@ -2201,7 +2094,7 @@ void init_state () {
 			 "",
 			 "",
 			 STATE_NOP,STATE_NOP,
-			 "S_Opt_Game_Move_Enter",ACTION_NOP,ACTION_NOP);
+			 S_Opt_Game_Move_Enter,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Opt_Game_Auto",
 		 STATE_NO_FLAGS,
@@ -2216,7 +2109,7 @@ void init_state () {
 			 "",
 			 "",
 			 STATE_NOP,STATE_NOP,
-			 "S_Opt_Game_Auto_Enter",ACTION_NOP,ACTION_NOP);
+			 S_Opt_Game_Auto_Enter,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Opt_Game_Back",
 		 STATE_NO_FLAGS,
@@ -2249,7 +2142,7 @@ void init_state () {
 			 "",
 			 "",
 			 STATE_NOP,STATE_NOP,
-			 "S_Opt_Gravity_Full_Enter",ACTION_NOP,ACTION_NOP);
+			 S_Opt_Gravity_Full_Enter,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Opt_Gravity_High",
 		 STATE_NO_FLAGS,
@@ -2264,14 +2157,14 @@ void init_state () {
 			 "",
 			 "",
 			 STATE_NOP,STATE_NOP,
-			 "S_Opt_Gravity_High_Enter",ACTION_NOP,ACTION_NOP);
+			 S_Opt_Gravity_High_Enter,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Opt_Gravity_None",
 		 STATE_NO_FLAGS,
 		 "Gravity...",
 	//	 "1234567890123456",
 		 "Next        None",
-		 "S_Opt_Gravity_Back","S_Opt_Gravity_None_Select",
+		 "S_Opt_Gravity_Negative","S_Opt_Gravity_None_Select",
 		 ACTION_NOP,ACTION_NOP,ACTION_NOP);
 
 			StateGuiAdd("S_Opt_Gravity_None_Select",
@@ -2279,7 +2172,22 @@ void init_state () {
 			 "",
 			 "",
 			 STATE_NOP,STATE_NOP,
-			 "S_Opt_Gravity_None_Enter",ACTION_NOP,ACTION_NOP);
+			 S_Opt_Gravity_None_Enter,ACTION_NOP,ACTION_NOP);
+
+		StateGuiAdd("S_Opt_Gravity_Negative",
+		 STATE_NO_FLAGS,
+		 "Gravity...",
+	//	 "1234567890123456",
+		 "Next        None",
+		 "S_Opt_Gravity_Back","S_Opt_Gravity_Negative_Select",
+		 ACTION_NOP,ACTION_NOP,ACTION_NOP);
+
+			StateGuiAdd("S_Opt_Gravity_Negative_Select",
+			 STATE_NO_VERBOSE,
+			 "",
+			 "",
+			 STATE_NOP,STATE_NOP,
+			 S_Opt_Gravity_Negative_Enter,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Opt_Gravity_Back",
 		 STATE_NO_FLAGS,
@@ -2312,7 +2220,7 @@ void init_state () {
 			 "",
 			 "",
 			 STATE_NOP,STATE_NOP,
-			 "S_Opt_Fuel_Normal_Enter",ACTION_NOP,ACTION_NOP);
+			 S_Opt_Fuel_Normal_Enter,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Opt_Fuel_Low",
 		 STATE_NO_FLAGS,
@@ -2327,7 +2235,7 @@ void init_state () {
 			 "",
 			 "",
 			 STATE_NOP,STATE_NOP,
-			 "S_Opt_Fuel_Low_Enter",ACTION_NOP,ACTION_NOP);
+			 S_Opt_Fuel_Low_Enter,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Opt_Fuel_Nolimit",
 		 STATE_NO_FLAGS,
@@ -2342,7 +2250,7 @@ void init_state () {
 			 "",
 			 "",
 			 STATE_NOP,STATE_NOP,
-			 "S_Opt_Fuel_Nolimit_Enter",ACTION_NOP,ACTION_NOP);
+			 S_Opt_Fuel_Nolimit_Enter,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Opt_Fuel_Back",
 		 STATE_NO_FLAGS,
@@ -2376,7 +2284,7 @@ void init_state () {
 			 "",
 			 "",
 			 STATE_NOP,STATE_NOP,
-			 "S_Opt_Pos_Center_Enter",ACTION_NOP,ACTION_NOP);
+			 S_Opt_Pos_Center_Enter,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Opt_Pos_Random",
 		 STATE_NO_FLAGS,
@@ -2391,7 +2299,7 @@ void init_state () {
 			 "",
 			 "",
 			 STATE_NOP,STATE_NOP,
-			 "S_Opt_Pos_Random_Enter",ACTION_NOP,ACTION_NOP);
+			 S_Opt_Pos_Random_Enter,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Opt_Pos_Back",
 		 STATE_NO_FLAGS,
@@ -2419,14 +2327,14 @@ void init_state () {
 //	 "1234567890123456",
 	 "Next  I/O_Values",
 	 "S_Test_SanityTest","S_IO_STATE",
-	 "S_Test_enter",ACTION_NOP,ACTION_NOP);
+	 S_Test_enter,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_IO_STATE",
 		 STATE_NO_VERBOSE,
 		 "I/O State       ",
 		 "  Display...    ",
 		 STATE_NOP,STATE_NOP,
-		 ACTION_NOP,"S_IO_STATE_loop",ACTION_NOP);
+		 ACTION_NOP,S_IO_STATE_loop,ACTION_NOP);
 
 	StateGuiAdd("S_Test_SanityTest",
 	 STATE_NO_FLAGS,
@@ -2442,7 +2350,7 @@ void init_state () {
 	//	 "1234567890123456",
 		 "Main        Next",
 		 "S_Main_Menu","S_Test_Sanity_State_Select",
-		 "S_Test_Sanity_Base_enter",ACTION_NOP,ACTION_NOP);
+		 S_Test_Sanity_Base_enter,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Test_Sanity_State_Select",
 		 STATE_NO_FLAGS,
@@ -2450,7 +2358,7 @@ void init_state () {
 	//	 "1234567890123456",
 		 "Main        Next",
 		 "S_Main_Menu","S_Test_Sanity_Antennae_Select",
-		 "S_Test_Sanity_State_enter",ACTION_NOP,ACTION_NOP);
+		 S_Test_Sanity_State_enter,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Test_Sanity_Antennae_Select",
 		 STATE_NO_FLAGS,
@@ -2458,7 +2366,7 @@ void init_state () {
 	//	 "1234567890123456",
 		 "Main        Next",
 		 "S_Main_Menu","S_Test_Sanity_Positions_Select",
-		 "S_Test_Sanity_Antennae_enter",ACTION_NOP,ACTION_NOP);
+		 S_Test_Sanity_Antennae_enter,ACTION_NOP,ACTION_NOP);
 
 
 		StateGuiAdd("S_Test_Sanity_Positions_Select",
@@ -2467,7 +2375,7 @@ void init_state () {
 	//	 "1234567890123456",
 		 "Main        Next",
 		 "S_Main_Menu","S_Test_Sanity_Tables_Select",
-		 "S_Test_Sanity_Positions_enter",ACTION_NOP,ACTION_NOP);
+		 S_Test_Sanity_Positions_enter,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Test_Sanity_Tables_Select",
 		 STATE_NO_FLAGS,
@@ -2475,7 +2383,7 @@ void init_state () {
 	//	 "1234567890123456",
 		 "Main        Next",
 		 "S_Main_Menu","S_Main_Menu",
-		 "S_Test_Sanity_Tables_enter",ACTION_NOP,ACTION_NOP);
+		 S_Test_Sanity_Tables_enter,ACTION_NOP,ACTION_NOP);
 
 	StateGuiAdd("S_Test_Name",
 	 STATE_NO_FLAGS,
@@ -2491,7 +2399,7 @@ void init_state () {
 	//	 "1234567890123456",
 		 "Char+  Position+",
 		 STATE_NOP, STATE_NOP,
-		 "S_Name_enter",ACTION_NOP,ACTION_NOP);
+		 S_Name_enter,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Enter_Name",
 		 STATE_NO_DISPLAY,
@@ -2505,14 +2413,14 @@ void init_state () {
 		 "",
 		 "",
 		 STATE_NOP, STATE_NOP,
-		 "S_Name_Char_enter",ACTION_NOP,ACTION_NOP);
+		 S_Name_Char_enter,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Name_Next",
 		 STATE_NO_DISPLAY,
 		 "",
 		 "",
 		 STATE_NOP, STATE_NOP,
-		 "S_Name_Next_enter",ACTION_NOP,ACTION_NOP);
+		 S_Name_Next_enter,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_High_Score_Show",
 		 STATE_NO_FLAGS,
@@ -2527,7 +2435,7 @@ void init_state () {
 		 "",
 		 "",
 		 STATE_NOP, STATE_NOP,
-		 "S_High_Score_Done",ACTION_NOP,ACTION_NOP);
+		 S_High_Score_enter,ACTION_NOP,ACTION_NOP);
 
 	StateGuiAdd("S_Test_Simulation",
 	 STATE_NO_FLAGS,
@@ -2543,7 +2451,7 @@ void init_state () {
 	//	 "1234567890123456",
 		 "Next       Pause",
 		 "S_Test_Simulation_MilliMeters_Select","S_Test_Simulation_Pause",
-		 "S_Test_Simulation_Meters_enter","S_Test_Simulation_MicroMeters_loop",ACTION_NOP);
+		 S_Test_Simulation_Meters_enter,S_Test_Simulation_MicroMeters_loop,ACTION_NOP);
 
 		StateGuiAdd("S_Test_Simulation_MilliMeters_Select",
 		 STATE_NO_FLAGS,
@@ -2551,7 +2459,7 @@ void init_state () {
 	//	 "1234567890123456",
 		 "Next       Pause",
 		 "S_Test_Simulation_Cables_Select","S_Test_Simulation_Pause",
-		 "S_Test_Simulation_Meters_enter","S_Test_Simulation_MilliMeters_loop",ACTION_NOP);
+		 S_Test_Simulation_Meters_enter,S_Test_Simulation_MilliMeters_loop,ACTION_NOP);
 
 		StateGuiAdd("S_Test_Simulation_Cables_Select",
 		 STATE_NO_FLAGS,
@@ -2559,7 +2467,7 @@ void init_state () {
 	//	 "1234567890123456",
 		 "Next       Pause",
 		 "S_Test_Simulation_Steps_Select","S_Test_Simulation_Pause",
-		 "S_Test_Simulation_Cables_enter","S_Test_Simulation_Cables_loop",ACTION_NOP);
+		 S_Test_Simulation_Cables_enter,S_Test_Simulation_Cables_loop,ACTION_NOP);
 
 		StateGuiAdd("S_Test_Simulation_Steps_Select",
 		 STATE_NO_FLAGS,
@@ -2567,7 +2475,7 @@ void init_state () {
 	//	 "1234567890123456",
 		 "Next       Pause",
 		 "S_Test_Simulation_MicroMeters_Select","S_Test_Simulation_Pause",
-		 "S_Test_Simulation_Steps_enter","S_Test_Simulation_Steps_loop",ACTION_NOP);
+		 S_Test_Simulation_Steps_enter,S_Test_Simulation_Steps_loop,ACTION_NOP);
 
 		StateGuiAdd("S_Test_Simulation_Pause",
 		 STATE_NO_VERBOSE,
@@ -2575,14 +2483,14 @@ void init_state () {
 	//	 "1234567890123456",
 		 "Main_Menu Resume",
 		 "S_Main_Menu","S_Test_Simulation_Resume",
-		 "do_Simulation_Pause_enter",ACTION_NOP,ACTION_NOP);
+		 do_Simulation_Pause_enter,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Test_Simulation_Resume",
 		 STATE_NO_VERBOSE,
 		 "",
 		 "",
 		 STATE_NOP,STATE_NOP,
-		 "do_Simulation_Resume_enter",ACTION_NOP,ACTION_NOP);
+		 do_Simulation_Resume_enter,ACTION_NOP,ACTION_NOP);
 
 	StateGuiAdd("S_Test_Motor_Test",
 	 STATE_NO_FLAGS,
@@ -2605,14 +2513,14 @@ void init_state () {
 			 "",
 			 "",
 			 STATE_NOP,STATE_NOP,
-			 "S_TestMotor_NextSet_enter",ACTION_NOP,ACTION_NOP);
+			 S_TestMotor_NextSet_enter,ACTION_NOP,ACTION_NOP);
 
 			StateGuiAdd("S_TestMotor_NextSet_Done",
 			 STATE_NO_FLAGS,
 			 "",
 			 "",
 			 STATE_NOP,STATE_NOP,
-			 "S_TestMotor_NextSet_Done_enter",ACTION_NOP,ACTION_NOP);
+			 S_TestMotor_NextSet_Done_enter,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_TestMotor_PlusStep",
 		 STATE_FROM_CALLBACK,
@@ -2627,7 +2535,7 @@ void init_state () {
 			 "",
 			 "",
 			 STATE_NOP,STATE_NOP,
-			 "S_TestMotor_PlusStep_enter",ACTION_NOP,ACTION_NOP);
+			 S_TestMotor_PlusStep_enter,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_TestMotor_MinusStep",
 		 STATE_NO_FLAGS,
@@ -2642,7 +2550,7 @@ void init_state () {
 			 "",
 			 "",
 			 STATE_NOP,STATE_NOP,
-			 "S_TestMotor_MinusStep_enter",ACTION_NOP,ACTION_NOP);
+			 S_TestMotor_MinusStep_enter,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_TestMotor_Plus360",
 		 STATE_NO_FLAGS,
@@ -2657,7 +2565,7 @@ void init_state () {
 			 "",
 			 "",
 			 STATE_NOP,STATE_NOP,
-			 "S_TestMotor_Plus360_enter",ACTION_NOP,ACTION_NOP);
+			 S_TestMotor_Plus360_enter,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_TestMotor_Minus360",
 		 STATE_NO_FLAGS,
@@ -2672,7 +2580,7 @@ void init_state () {
 			 "",
 			 "",
 			 STATE_NOP,STATE_NOP,
-			 "S_TestMotor_Minus360_enter",ACTION_NOP,ACTION_NOP);
+			 S_TestMotor_Minus360_enter,ACTION_NOP,ACTION_NOP);
 
 
 	StateGuiAdd("S_Test_Calibrate_Home",
@@ -2697,21 +2605,21 @@ void init_state () {
 	//	 "1234567890123456",
 		 "Done          Go",
 		 "S_Main_GoHome","S_Calibrate_Position_Go",
-		 "S_Calibrate_Position_Enter","S_Calibrate_Position_Loop",ACTION_NOP);
+		 S_Calibrate_Position_enter,S_Calibrate_Position_loop,ACTION_NOP);
 
 			StateGuiAdd("S_Calibrate_Position_Go",
 			 STATE_NO_VERBOSE,
 			 "",
 			 "",
 			 STATE_NOP,STATE_NOP,
-			 "S_Calibrate_Position_Go_enter",ACTION_NOP,ACTION_NOP);
+			 S_Calibrate_Position_Go_enter,ACTION_NOP,ACTION_NOP);
 
 	StateGuiAdd("S_Test_Calibrate_Circle",
 	 STATE_NO_FLAGS,
 	 "Test...",
 //	 "1234567890123456",
 	 "Next  Motor_Circ",
-	 "S_Test_Motor_Status","S_Calibrate_Circle_Select",
+	 "S_Test_Calibrate_Ground","S_Calibrate_Circle_Select",
 	 ACTION_NOP,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Calibrate_Circle_Select",
@@ -2720,21 +2628,44 @@ void init_state () {
 	//	 "1234567890123456",
 		 "Done          Go",
 		 "S_Main_GoHome","S_Calibrate_Circle_Go",
-		 "S_Calibrate_Circle_Enter","S_Calibrate_Circle_Loop",ACTION_NOP);
+		 S_Calibrate_Circle_enter,S_Calibrate_Circle_loop,ACTION_NOP);
 
 			StateGuiAdd("S_Calibrate_Circle_Go",
 			 STATE_NO_VERBOSE,
 			 "",
 			 "",
 			 STATE_NOP,STATE_NOP,
-			 "S_Calibrate_Circle_Go_enter",ACTION_NOP,ACTION_NOP);
+			 S_Calibrate_Circle_Go_enter,ACTION_NOP,ACTION_NOP);
 
 			StateGuiAdd("S_Calibrate_BumbleBee_Go",
 			 STATE_NO_VERBOSE|STATE_FROM_CALLBACK,
 			 "",
 			 "",
 			 STATE_NOP,STATE_NOP,
-			 "S_Calibrate_BumbleBee_Go_enter",ACTION_NOP,ACTION_NOP);
+			 S_Calibrate_BumbleBee_Go_enter,ACTION_NOP,ACTION_NOP);
+
+	StateGuiAdd("S_Test_Calibrate_Ground",
+	 STATE_NO_FLAGS,
+	 "Test...",
+//	 "1234567890123456",
+	 "Next  Mtr_Ground",
+	 "S_Test_Motor_Status","S_Calibrate_Ground_Select",
+	 ACTION_NOP,ACTION_NOP,ACTION_NOP);
+
+		StateGuiAdd("S_Calibrate_Ground_Select",
+		 STATE_NO_VERBOSE,
+		 "Motor     Ground",
+	//	 "1234567890123456",
+		 "Done          Go",
+		 "S_Main_GoHome","S_Calibrate_Ground_Go",
+		 S_Calibrate_Ground_enter,S_Calibrate_Ground_loop,ACTION_NOP);
+
+			StateGuiAdd("S_Calibrate_Ground_Go",
+			 STATE_NO_VERBOSE,
+			 "",
+			 "",
+			 STATE_NOP,STATE_NOP,
+			 S_Calibrate_Ground_Go_enter,ACTION_NOP,ACTION_NOP);
 
 	StateGuiAdd("S_Test_Motor_Status",
 	 STATE_NO_FLAGS,
@@ -2750,7 +2681,7 @@ void init_state () {
 	//	 "1234567890123456",
 		 "Done",
 		 "S_Main_Menu","S_Main_Menu",
-		 ACTION_NOP,"S_Test_Motor_Status_loop",ACTION_NOP);
+		 ACTION_NOP,S_Test_Motor_Status_loop,ACTION_NOP);
 
 	StateGuiAdd("S_Test_I2cDisplayTest",
 	 STATE_NO_FLAGS,
@@ -2773,7 +2704,7 @@ void init_state () {
 		 "",
 		 "",
 		 STATE_NOP,STATE_NOP,
-		 "S_Test_I2C_enter",ACTION_NOP,ACTION_NOP);
+		 S_Test_I2C_enter,ACTION_NOP,ACTION_NOP);
 
 	StateGuiAdd("S_Test_Segment",
 	 STATE_NO_FLAGS,
@@ -2788,7 +2719,7 @@ void init_state () {
 		 "",
 		 "",
 		 STATE_NOP,STATE_NOP,
-		 "S_Test_Segment_Open_enter",ACTION_NOP,ACTION_NOP);
+		 S_Test_Segment_Open_enter,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Test_Segment_Select",
 		 STATE_FROM_CALLBACK,
@@ -2803,7 +2734,7 @@ void init_state () {
 		 "",
 		 "",
 		 STATE_NOP,STATE_NOP,
-		 "S_Test_Segment_enter",ACTION_NOP,ACTION_NOP);
+		 S_Test_Segment_enter,ACTION_NOP,ACTION_NOP);
 
 	StateGuiAdd("S_Test_Antennae",
 	 STATE_NO_FLAGS,
@@ -2818,7 +2749,7 @@ void init_state () {
 		 "",
 		 "",
 		 STATE_NOP,STATE_NOP,
-		 "S_Test_Antennae_Select_enter",ACTION_NOP,ACTION_NOP);
+		 S_Test_Antennae_Select_enter,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Test_Antennae_Go",
 		 STATE_FROM_CALLBACK,
@@ -2826,14 +2757,14 @@ void init_state () {
 	//	 "1234567890123456",
 		 "Exit   Next_Axis",
 		 "S_Test_Select","S_Test_Antennae_Next",
-		 "S_Test_Antennae_enter","S_Test_Antennae_loop","S_Test_Antennae_exit");
+		 S_Test_Antennae_enter,S_Test_Antennae_loop,S_Test_Antennae_exit);
 
 		StateGuiAdd("S_Test_Antennae_Next",
 		 STATE_NO_FLAGS,
 		 "",
 		 "",
 		 STATE_NOP,STATE_NOP,
-		 "S_Test_Antennae_Next_enter",ACTION_NOP,ACTION_NOP);
+		 S_Test_Antennae_Next_enter,ACTION_NOP,ACTION_NOP);
 
 	StateGuiAdd("S_Test_Ledrgb",
 	 STATE_NO_FLAGS,
@@ -2849,7 +2780,7 @@ void init_state () {
 	//	 "1234567890123456",
 		 "Exit",
 		 "S_Test_Select","S_Test_Select",
-		 "S_Test_LedRgb_enter","S_Test_LedRgb_loop","S_Test_LedRgb_exit");
+		 S_Test_LedRgb_enter,S_Test_LedRgb_loop,S_Test_LedRgb_exit);
 
 	StateGuiAdd("S_Test_Sound",
 	 STATE_NO_FLAGS,
@@ -2864,7 +2795,7 @@ void init_state () {
 		 "",
 		 "",
 		 STATE_NOP,STATE_NOP,
-		 "S_Test_Sound_Select_enter",ACTION_NOP,ACTION_NOP);
+		 S_Test_Sound_Select_enter,ACTION_NOP,ACTION_NOP);
 
 		StateGuiAdd("S_Test_Sound_Go",
 		 STATE_FROM_CALLBACK,
@@ -2872,14 +2803,14 @@ void init_state () {
 	//	 "1234567890123456",
 		 "Exit  Next_Motor",
 		 "S_Test_Select","S_Test_Sound_Next",
-		 "S_Test_Sound_enter","S_Test_Sound_loop","S_Test_Sound_exit");
+		 S_Test_Sound_enter,S_Test_Sound_loop,S_Test_Sound_exit);
 
 		StateGuiAdd("S_Test_Sound_Next",
 		 STATE_NO_FLAGS,
 		 "",
 		 "",
 		 STATE_NOP,STATE_NOP,
-		 "S_Test_Sound_Next_enter",ACTION_NOP,ACTION_NOP);
+		 S_Test_Sound_Next_enter,ACTION_NOP,ACTION_NOP);
 
 	StateGuiAdd("S_Test_Back",
 	 STATE_NO_FLAGS,
@@ -2893,28 +2824,28 @@ void init_state () {
 // Flight states
 
 	StateGuiAdd("S_Flight_Linear",
-	 STATE_FROM_CALLBACK|STATE_NO_VERBOSE|STATE_NO_MENU_TEXT,
+	 STATE_FROM_CALLBACK|STATE_NO_VERBOSE,
 	 "Fly...",
 //	 "1234567890123456",
-	 "Stop   ",
-	 "S_Main_GoHome",STATE_NOP,
-	 ACTION_NOP,"S_Flight_Linear_loop",ACTION_NOP);
+	 "",
+	 "S_Main_GoHome",STATE_INHERIT_2,
+	 ACTION_NOP,S_Flight_Linear_loop,ACTION_NOP);
 
 	StateGuiAdd("S_Flight_Circle",
-	 STATE_FROM_CALLBACK|STATE_NO_VERBOSE|STATE_NO_MENU_TEXT,
+	 STATE_FROM_CALLBACK|STATE_NO_VERBOSE,
 	 "Circle...",
 //	 "1234567890123456",
-	 "Stop   ",
-	 "S_Main_GoHome",STATE_NOP,
-	 ACTION_NOP,"S_Flight_Circle_loop",ACTION_NOP);
+	 "",
+	 "S_Main_GoHome",STATE_INHERIT_2,
+	 ACTION_NOP,S_Flight_Circle_loop,ACTION_NOP);
 
 	StateGuiAdd("S_Flight_Wait",
-	 STATE_FROM_CALLBACK|STATE_NO_VERBOSE|STATE_NO_MENU_TEXT,
+	 STATE_FROM_CALLBACK|STATE_NO_VERBOSE,
 	 "Wait...",
 //	 "1234567890123456",
 	 "Stop   ",
 	 "S_Main_Menu",STATE_NOP,
-	 ACTION_NOP,"S_Flight_Wait_loop",ACTION_NOP);
+	 ACTION_NOP,S_Flight_Wait_loop,ACTION_NOP);
 
 
 // Self test: orphaned state with bad-links
@@ -2924,7 +2855,8 @@ void init_state () {
 	 "",
 	 "",
 	 "S_Orphan_Error_K1","S_Orphan_Error_K2",
-	 "S_Orphan_Error_Enter","S_Orphan_Error_Loop","S_Orphan_Error_Exit");
+//	 S_Orphan_Error_Enter,S_Orphan_Error_loop,S_Orphan_Error_exit);
+	 ACTION_NOP,ACTION_NOP,ACTION_NOP);
 
 	StateGuiAdd("S_Orphan_Error", /* duplicate state test */
 	 STATE_NO_FLAGS,
@@ -2944,8 +2876,8 @@ void state_loop() {
 
 	/* New frame, new state? */
 	if (NULL != state_next_frame) {
+		// state_next_frame is reset in goto_state()
 		goto_state(state_next_frame);
-		state_next_frame = NULL;
 	}
 
 	/* Process Buttons (default mode is toggle) */
@@ -2964,6 +2896,8 @@ void state_loop() {
 	}
 
 	// execute any state loop function
-	state_callback(state_array[state_now].state_loop);
+	if (ACTION_NOP != state_array[state_now].state_loop)
+		state_array[state_now].state_loop();
+
 }
 
