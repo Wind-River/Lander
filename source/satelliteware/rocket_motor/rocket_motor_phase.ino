@@ -435,6 +435,11 @@ boolean Motor::motor_dispatcher(Motor *motor_nw,Motor *motor_ne,Motor *motor_sw,
     motor_ne->microseconds_step_count = 0L;
     motor_sw->microseconds_step_count = 0L;
     motor_se->microseconds_step_count = 0L;
+    /* reset timing debug */
+    motor_nw->time_step_loops = 0L;
+    motor_ne->time_step_loops = 0L;
+    motor_sw->time_step_loops = 0L;
+    motor_se->time_step_loops = 0L;
   }
 
   /* if not pending move request we are done here */
@@ -714,7 +719,6 @@ void loop() {
   uint32_t usec_now;
   uint32_t usec_diff;
   uint8_t verbose_orig = verbose;
-  boolean quick_display = false;
 
   if (ENABLE_TIMING) ave_loop.setStop();
 
@@ -770,31 +774,12 @@ void loop() {
 
     // move the motors forward one step
     if ('+' == char_in) {
-      motor_nw.step_destination++;
-      motor_ne.step_destination++;
-      motor_sw.step_destination++;
-      motor_se.step_destination++;
-      quick_display = true;
+      Motor::move_next(1,1,1,1,MOTOR_SPEED_AUTO);
     }
 
     // move the motors back one step
     if ('-' == char_in) {
-      motor_nw.step_destination--;
-      motor_ne.step_destination--;
-      motor_sw.step_destination--;
-      motor_se.step_destination--;
-      quick_display = true;
-    }
-
-    if (quick_display) {
-      Serial.print("== Quick step display: NW=");
-      Serial.print(motor_nw.step_destination);
-      Serial.print(", NE=");
-      Serial.print(motor_ne.step_destination);
-      Serial.print(", SW=");
-      Serial.print(motor_sw.step_destination);
-      Serial.print(", SE=");
-      Serial.println(motor_se.step_destination);
+      Motor::move_next(-1,-1,-1,-1,MOTOR_SPEED_AUTO);
     }
 
     // move the motors forward one revolution
@@ -863,50 +848,12 @@ void loop() {
       }
     }
 
-    // goto high position
-    if ('h' == char_in) {
-      // ((240,170,580) to (0,0,480) (mm) = 310.6 mm = (310644 um / 125.6 um_per_step) = 2473.3 steps
-      uint32_t destination = 2473;
-      Motor::set_next(destination,destination,destination,destination,MOTOR_SPEED_AUTO);
-      Motor::move_destination();
-    }
-
-    // goto low position
-    if ('l' == char_in) {
-      // ((240,170,580) to (0,0,0) (mm) = 554.7 mm = (554700 um / 125.6 um_per_step) = 4416.4 steps
-      uint32_t destination = 4416;
-      Motor::set_next(destination,destination,destination,destination,MOTOR_SPEED_AUTO);
-      Motor::move_destination();
-    }
-
-    /* NOTE: 4416 - 2473 = 1943 steps @ 800 steps/second = 2.5 seconds move = 9.7 turns */
-
-      // goto high NW corner position
-    if ('6' == char_in) {
-      Motor::set_next(
-        dist2steps(-240, 170,580, -200,100,200),
-        dist2steps( 240, 170,580, -200,100,200),
-        dist2steps(-240,-170,580, -200,100,200),
-        dist2steps( 240,-170,580, -200,100,200),
-        MOTOR_SPEED_AUTO);
-      Motor::move_destination();
-    }
-    // goto low SE corner position
-    if ('7' == char_in) {
-      Motor::set_next(
-        dist2steps(-240, 170,580, 200,-100,0),
-        dist2steps( 240, 170,580, 200,-100,0),
-        dist2steps(-240,-170,580, 200,-100,0),
-        dist2steps( 240,-170,580, 200,-100,0),
-        MOTOR_SPEED_AUTO);
-      Motor::move_destination();
-    }
-
   // test available integer types
     if ('y' == char_in) {
       uint8_t my_byte= 1;
       uint16_t my_long= 1;
       uint32_t my_dlong= 1;
+      int my_int= 1;
       for (int i=0;i<32;i++) {
         Serial.print(i);
         Serial.print(":");
@@ -914,10 +861,13 @@ void loop() {
         Serial.print(",");
         Serial.print(my_long,HEX);
         Serial.print(",");
-        Serial.println(my_dlong,HEX);
+        Serial.print(my_dlong,HEX);
+        Serial.print(",");
+        Serial.println(my_int,HEX);
         my_byte <<= 1;
         my_long <<= 1;
         my_dlong <<= 1;
+        my_int <<= 1;
       }
     }
 
@@ -975,9 +925,8 @@ void loop() {
         Serial.print((motor_sw.step_location * ROCKET_TOWER_STEPS_PER_UM10)/UM10_PER_MILLIMETER);
         Serial.print(", SE=");
         Serial.print((motor_se.step_location * ROCKET_TOWER_STEPS_PER_UM10)/UM10_PER_MILLIMETER);
-    Serial.print(", diff=");
-    Serial.println(usec_diff);
-        
+        Serial.print(", diff=");
+        Serial.println(usec_diff);
       }
     }
   }
@@ -999,7 +948,9 @@ void display_debug() {
   Serial.print("Power = ");
   Serial.print(motor_nw.power_pwm);
   Serial.print(", Mode = ");
-  Serial.println(Motor::mode);
+  Serial.print(Motor::mode);
+  Serial.print(", Verbose = ");
+  Serial.println(verbose);
 }
 
 void display_debug_histograms() {
@@ -1202,3 +1153,4 @@ void requestEvent() {
   }
 
 }
+
