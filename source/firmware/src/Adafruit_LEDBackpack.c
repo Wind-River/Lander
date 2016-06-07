@@ -43,6 +43,13 @@ static uint16_t displaybuffer[8];
 static struct device * i2c;
 static uint8_t position = 0;
 
+/* LED segment bit values:
+     01
+   20  02
+     40   
+   10  04
+     08
+*/
 static const uint8_t numbertable[] = {
 	0x3F, /* 0 */
 	0x06, /* 1 */
@@ -60,6 +67,8 @@ static const uint8_t numbertable[] = {
 	0x5E, /* d */
 	0x79, /* E */
 	0x71, /* F */
+	0x38, /* 0x10 = 'L' */
+	0x3e, /* 0x11 = 'U' */
 };
 
 void bp_setdevice (zephyr_dev dev)
