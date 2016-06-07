@@ -22,6 +22,8 @@
 #define COMPASS_CALC_POS    3   // calculate compass for position moves
 #define COMPASS_CALC_CIRC   4   // calculate compass for circle moves
 #define COMPASS_LOCK        5   // lock/unlock the compass heading
+#define COMPASS_CALC_GROUND 6   // calculate compass for ground moves
+
 
 struct CompassRec {
     int32_t calibration_lock_x;
