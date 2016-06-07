@@ -67,12 +67,11 @@ struct ROCKET_TOWER_S r_towers[ROCKET_TOWER_MAX] = {
         .pos_y       = Y_POS_MAX,
         .pos_z       = Z_POS_MAX,
         .mount_pos_x = ROCKET_MOUNT_X_POS_MIN,
-	    .mount_pos_y = ROCKET_MOUNT_Y_POS_MAX,
-	    .mount_pos_z = ROCKET_MOUNT_Z_POS_MAX,
+        .mount_pos_y = ROCKET_MOUNT_Y_POS_MAX,
+        .mount_pos_z = ROCKET_MOUNT_Z_POS_MAX,
         .um2step_slope = 1005L, // default = 125.64 uM/step << 3
         .um2step_scaler = 3,
         .um2step_offset = 0,
-        .i2c_address = ROCKET_TOWER_NW_ADDR,
         .speed = MOTOR_SPEED_AUTO
     },
     {
@@ -81,12 +80,11 @@ struct ROCKET_TOWER_S r_towers[ROCKET_TOWER_MAX] = {
         .pos_y       = Y_POS_MAX,
         .pos_z       = Z_POS_MAX,
         .mount_pos_x = ROCKET_MOUNT_X_POS_MAX,
-	    .mount_pos_y = ROCKET_MOUNT_Y_POS_MAX,
-	    .mount_pos_z = ROCKET_MOUNT_Z_POS_MAX,
+        .mount_pos_y = ROCKET_MOUNT_Y_POS_MAX,
+        .mount_pos_z = ROCKET_MOUNT_Z_POS_MAX,
         .um2step_slope = 1005L, // default = 125.64 uM/step << 3
         .um2step_scaler = 3,
         .um2step_offset = 0,
-        .i2c_address = ROCKET_TOWER_NE_ADDR,
         .speed = MOTOR_SPEED_AUTO
     },
     {
@@ -95,12 +93,11 @@ struct ROCKET_TOWER_S r_towers[ROCKET_TOWER_MAX] = {
         .pos_y       = Y_POS_MIN,
         .pos_z       = Z_POS_MAX,
         .mount_pos_x = ROCKET_MOUNT_X_POS_MIN,
-	    .mount_pos_y = ROCKET_MOUNT_Y_POS_MIN,
-	    .mount_pos_z = ROCKET_MOUNT_Z_POS_MAX,
+        .mount_pos_y = ROCKET_MOUNT_Y_POS_MIN,
+        .mount_pos_z = ROCKET_MOUNT_Z_POS_MAX,
         .um2step_slope = 1005L, // default = 125.64 uM/step << 3
         .um2step_scaler = 3,
         .um2step_offset = 0,
-        .i2c_address = ROCKET_TOWER_SW_ADDR,
         .speed = MOTOR_SPEED_AUTO
     },
     {
@@ -109,16 +106,107 @@ struct ROCKET_TOWER_S r_towers[ROCKET_TOWER_MAX] = {
         .pos_y       = Y_POS_MIN,
         .pos_z       = Z_POS_MAX,
         .mount_pos_x = ROCKET_MOUNT_X_POS_MAX,
-	    .mount_pos_y = ROCKET_MOUNT_Y_POS_MIN,
-	    .mount_pos_z = ROCKET_MOUNT_Z_POS_MAX,
+        .mount_pos_y = ROCKET_MOUNT_Y_POS_MIN,
+        .mount_pos_z = ROCKET_MOUNT_Z_POS_MAX,
         .um2step_slope = 1005L, // default = 125.64 uM/step << 3
         .um2step_scaler = 3,
         .um2step_offset = 0,
-        .i2c_address = ROCKET_TOWER_SE_ADDR,
         .speed = MOTOR_SPEED_AUTO
     },
 };
 
+struct ROCKET_GROUND_S r_ground[ROCKET_GROUND_MAX] = {
+    {
+    	.name		= "00",
+        .pos_x_min	= (GROUND_X_SIZE * 0L),
+        .pos_x_max	= (GROUND_X_SIZE * 1L),
+        .pos_y_min	= (GROUND_Y_SIZE * 0L),
+        .pos_y_max	= (GROUND_Y_SIZE * 1L),
+        .um2step_slope = 1005L, // default = 125.64 uM/step << 3
+        .um2step_scaler = 3,
+        .um2step_offset = 0,
+    },
+    {
+    	.name		= "01",
+        .pos_x_min	= (GROUND_X_SIZE * 1L),
+        .pos_x_max	= (GROUND_X_SIZE * 2L),
+        .pos_y_min	= (GROUND_Y_SIZE * 0L),
+        .pos_y_max	= (GROUND_Y_SIZE * 1L),
+        .um2step_slope = 1005L, // default = 125.64 uM/step << 3
+        .um2step_scaler = 3,
+        .um2step_offset = 0,
+    },
+    {
+    	.name		= "02",
+        .pos_x_min	= (GROUND_X_SIZE * 2L),
+        .pos_x_max	= (GROUND_X_SIZE * 3L),
+        .pos_y_min	= (GROUND_Y_SIZE * 0L),
+        .pos_y_max	= (GROUND_Y_SIZE * 1L),
+        .um2step_slope = 1005L, // default = 125.64 uM/step << 3
+        .um2step_scaler = 3,
+        .um2step_offset = 0,
+    },
+    {
+    	.name		= "10",
+        .pos_x_min	= (GROUND_X_SIZE * 0L),
+        .pos_x_max	= (GROUND_X_SIZE * 1L),
+        .pos_y_min	= (GROUND_Y_SIZE * 1L),
+        .pos_y_max	= (GROUND_Y_SIZE * 2L),
+        .um2step_slope = 1005L, // default = 125.64 uM/step << 3
+        .um2step_scaler = 3,
+        .um2step_offset = 0,
+    },
+    {
+    	.name		= "11",
+        .pos_x_min	= (GROUND_X_SIZE * 1L),
+        .pos_x_max	= (GROUND_X_SIZE * 2L),
+        .pos_y_min	= (GROUND_Y_SIZE * 1L),
+        .pos_y_max	= (GROUND_Y_SIZE * 2L),
+        .um2step_slope = 1005L, // default = 125.64 uM/step << 3
+        .um2step_scaler = 3,
+        .um2step_offset = 0,
+    },
+    {
+    	.name		= "12",
+        .pos_x_min	= (GROUND_X_SIZE * 2L),
+        .pos_x_max	= (GROUND_X_SIZE * 3L),
+        .pos_y_min	= (GROUND_Y_SIZE * 1L),
+        .pos_y_max	= (GROUND_Y_SIZE * 2L),
+        .um2step_slope = 1005L, // default = 125.64 uM/step << 3
+        .um2step_scaler = 3,
+        .um2step_offset = 0,
+    },
+    {
+    	.name		= "20",
+        .pos_x_min	= (GROUND_X_SIZE * 0L),
+        .pos_x_max	= (GROUND_X_SIZE * 1L),
+        .pos_y_min	= (GROUND_Y_SIZE * 2L),
+        .pos_y_max	= (GROUND_Y_SIZE * 3L),
+        .um2step_slope = 1005L, // default = 125.64 uM/step << 3
+        .um2step_scaler = 3,
+        .um2step_offset = 0,
+    },
+    {
+    	.name		= "21",
+        .pos_x_min	= (GROUND_X_SIZE * 1L),
+        .pos_x_max	= (GROUND_X_SIZE * 2L),
+        .pos_y_min	= (GROUND_Y_SIZE * 2L),
+        .pos_y_max	= (GROUND_Y_SIZE * 3L),
+        .um2step_slope = 1005L, // default = 125.64 uM/step << 3
+        .um2step_scaler = 3,
+        .um2step_offset = 0,
+    },
+    {
+    	.name		= "22",
+        .pos_x_min	= (GROUND_X_SIZE * 2L),
+        .pos_x_max	= (GROUND_X_SIZE * 3L),
+        .pos_y_min	= (GROUND_Y_SIZE * 2L),
+        .pos_y_max	= (GROUND_Y_SIZE * 3L),
+        .um2step_slope = 1005L, // default = 125.64 uM/step << 3
+        .um2step_scaler = 3,
+        .um2step_offset = 0,
+    },
+};
 
 
 /*
@@ -282,7 +370,7 @@ void compute_rocket_next_position ()
 
 	if (GAME_XYZ_MOVE != r_game.game) {
 		// Acceleration due to gravity
-		if (r_space.rocket_delta_z) printf("Z=%d,x%d\n",r_space.rocket_delta_z,r_space.thrust_z);
+//		if (r_space.rocket_delta_z) printf("Z=%d,x%d\n",r_space.rocket_delta_z,r_space.thrust_z);
 		if (GAME_GRAVITY_NONE != r_game.gravity_option) {
 			r_space.rocket_delta_z -= r_space.gravity_delta;
 		}
@@ -401,10 +489,11 @@ void set_rocket_position ()
 		rocket_position_send();
 		rocket_command_send(ROCKET_MOTOR_CMD_PRESET);
  
+	}
+	if (IO_TRACKER_FOLLOW_ENABLE) {
  		// update Antennae
 		antenna_update();
 	}
-
  }
 
 /*
@@ -466,6 +555,12 @@ void move_rocket_next_position ()
 				r_towers[ROCKET_TOWER_SE].step_diff);
 		    }
 	}
+	
+	// update Antennae
+	if (IO_TRACKER_FOLLOW_ENABLE) {
+		antenna_update();
+	}
+
 
  }
 
@@ -516,15 +611,10 @@ void rocket_increment_send (int32_t increment_nw, int32_t increment_ne, int32_t 
 		buf[8]=(uint8_t) ((increment_se & 0x0000ffL)     );
 		i2c_polling_write (i2c, buf, 9, ROCKET_MOTOR_I2C_ADDRESS);
 	}
-	
-	// update Antennae
-	antenna_update();
-
  }
 
 /*
  * rocket_position_send : send the motor positions
- * NOTE: actual move defered until explicit rocket_command_send()
  *
  */
 
@@ -541,7 +631,29 @@ void rocket_position_send ()
 	buf[7]=(uint8_t) ((r_towers[ROCKET_TOWER_SE].step_count & 0x00ff00L) >> 8);
 	buf[8]=(uint8_t) ((r_towers[ROCKET_TOWER_SE].step_count & 0x0000ffL)     );
 	i2c_polling_write (i2c, buf, 9, ROCKET_MOTOR_I2C_ADDRESS);
+ }
 
+/*
+ * ground_position_send : send the ground motor positions
+ * NOTE: actual move defered until explicit rocket_command_send()
+ *       rocket motors are numbered 0..3
+ *       ground motors are numbered 4..13
+ */
+
+void ground_position_send ()
+ {
+	uint8_t buf[10];
+	
+	for (uint8_t i=0;i<ROCKET_GROUND_MAX;i++) {
+		if (r_ground[i].step_count != r_ground[i].step_goal) {
+			buf[0]=(uint8_t) ((i+4) / 10) + '0';
+			buf[1]=(uint8_t) ((i+4) % 10) + '0';
+			buf[2]=(uint8_t) ((r_ground[i].step_goal & 0x00ff00L) >> 8);
+			buf[3]=(uint8_t) ((r_ground[i].step_goal & 0x0000ffL)     );
+			i2c_polling_write (i2c, buf, 4, ROCKET_MOTOR_I2C_ADDRESS);
+			r_ground[i].step_count = r_ground[i].step_goal;
+		}
+	}
  }
 
 /*
