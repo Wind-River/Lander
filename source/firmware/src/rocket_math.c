@@ -231,6 +231,9 @@ int32_t micrometers2steps(int32_t tower,int32_t um) {
 	steps /= spool_samples[tower][i+1].length - spool_samples[tower][i].length;
 	steps += spool_samples[tower][i].steps;
 
+	// HACK FOR NEW SPINDLES ######s
+	steps /= 2;
+	
 	return (steps);
 }
 
@@ -414,6 +417,26 @@ void compass_select(uint8_t command, struct CompassRec *compass) {
 			compass->name = "AllMed";
 		} else if ((x_delta < 0) && (y_delta == 0)) {
 			compass->name = "AllLow";
+		}
+	} else if (COMPASS_CALC_GROUND ==  command) {
+		if        ((x_delta == 0) && (y_delta == 0)) {
+			compass->name = "Home";
+		} else if ((x_delta < 0) && (y_delta > 0)) {
+			compass->name = "      ";
+		} else if ((x_delta == 0) && (y_delta > 0)) {
+			compass->name = "+05";
+		} else if ((x_delta > 0) && (y_delta > 0)) {
+			compass->name = "      ";
+		} else if ((x_delta > 0) && (y_delta == 0)) {
+			compass->name = "+10";
+		} else if ((x_delta > 0) && (y_delta < 0)) {
+			compass->name = "      ";
+		} else if ((x_delta == 0) && (y_delta < 0)) {
+			compass->name = "+20";
+		} else if ((x_delta < 0) && (y_delta < 0)) {
+			compass->name = "      ";
+		} else if ((x_delta < 0) && (y_delta == 0)) {
+			compass->name = "      ";
 		}
 	} else {
 		if        ((x_delta < 0) && (y_delta > 0)) {
@@ -961,7 +984,7 @@ void antenna_update() {
 	pan_now=pan_degrees2pwm(degrees_x);
 	tilt_now=tilt_degrees2pwm(degrees_z);
 
-	printf("Antennae(%ld,%ld,%ld)=(%f,%f)=(%d,%d)\n",
+	if (false) printf("Antennae(%ld,%ld,%ld)=(%f,%f)=(%d,%d)\n",
 		r_space.rocket_goal_x,r_space.rocket_goal_y,r_space.rocket_goal_z,
 		degrees_x,degrees_z,
 		pan_now,tilt_now
