@@ -102,6 +102,32 @@ int32_t abs(int32_t val) {
 }
 
 /*
+ * Checkpoint support: capture check points as the code executes, latest and previous
+ *
+ *  This provides a passive context when the code gets lost, especially if the
+ *  OS is in an idle state and there is no stack trace available back 
+ *  into the code.
+ *
+ *  The checkpoint value is in decimal (the native format of the debugger), where
+ *  the 6 digits are:   xxxxxx
+ *                          ^^= the sub-checkpoints in a given sub-routine 
+ *                        ^^  = the sub-routine 
+ *                      ^^    = the file 
+ */
+ 
+ /* checkpoints to help track where code code got lost without a thread to pause */
+void checkpoint_v(int32_t check_num, int32_t check_value) {
+	r_game.check_point_prev = r_game.check_point_now;
+	r_game.check_point_now  = check_num;
+	r_game.check_point_value = check_value;
+}
+
+void checkpoint(int32_t check_num) {
+	checkpoint_v(check_num,0);
+}
+
+
+/*
  * Hardware definitions
  *
  */
@@ -182,6 +208,11 @@ void init_hardware() {
 		bp_begin();
 		bp_clear();
 		send_LED_Backpack(0);
+		seg_writeDigitNum(0, 0x0f, 0); /* 'F' */
+		seg_writeDigitNum(1, 0x11, 0); /* 'U' */
+		seg_writeDigitNum(3, 0x0e, 0); /* 'E' */
+		seg_writeDigitNum(4, 0x10, 0); /* 'L' */
+		bp_writeDisplay();
 	}
 
 	/* Init the Tracker */
@@ -202,13 +233,18 @@ void init_hardware() {
 void scan_controls () {
     int32_t rc;
 
+	checkpoint(200);
+
 	if (IO_BUTTONS_ENABLE) {
 		r_control.button_a = gpioInputGet(INPUT_A_PIN);
+		checkpoint(201);
 		r_control.button_b = gpioInputGet(INPUT_B_PIN);
 	}
+	checkpoint(202);
 
 	if (IO_JOYSTICK_ENABLE) {
         rc = adc_read(adc, &table);
+		checkpoint(203);
         if (DEV_OK != rc)
             {
             PRINT("ERROR: ADC read error! (%d)\n", rc);
@@ -222,6 +258,7 @@ void scan_controls () {
 				// TODO #################### How much time is spent waiting?
             }
         }
+		checkpoint(204);
         r_control.analog_x = seq_buffer[0];
         r_control.analog_y = seq_buffer[1];
         r_control.analog_z = seq_buffer[2];
@@ -244,6 +281,7 @@ void scan_controls () {
 		}
 
  	}
+	checkpoint(205);
 }
 
 /*
@@ -444,7 +482,7 @@ void init_game () {
 	} else if (r_game.game == GAME_XYZ_AUTO) {
 		init_rocket_game(init_x, init_y, GAME_Z_POS_MAX, r_game.fuel_option, r_game.gravity_option,GAME_PLAY);
 	} else if (r_game.game == GAME_XYZ_MOVE) {
-		init_rocket_game(init_x, init_y, GAME_Z_POS_MAX, r_game.fuel_option, r_game.gravity_option,GAME_PLAY);
+		init_rocket_game(init_x, init_y, ROCKET_HOME_Z /* GAME_Z_POS_MAX/2 */, r_game.fuel_option, r_game.gravity_option,GAME_PLAY);
 	} else {
 		init_rocket_game(init_x, init_y, GAME_Z_POS_MAX, r_game.fuel_option, r_game.gravity_option,GAME_PLAY);
 	}
@@ -536,6 +574,8 @@ void main() {
    	uint32_t time_start,time_stop;
 	uint32_t time_cycle_start,time_cycle_stop;
 
+	checkpoint(0x0101);
+	
 	init_main();
 	init_state();
 
@@ -549,6 +589,8 @@ void main() {
 	init_hardware();
     task_sleep(100);
 
+	checkpoint(102);
+
 	// Start the initial state
 	if (IO_BUTTON_BRINGUP) {
 		goto_state("S_Init");
@@ -558,7 +600,8 @@ void main() {
 
     while (1)
         {
-        	
+		checkpoint(110);
+
 		/* get the time at start of loop */
 	   	time_start = task_tick_get_32();
 	   	time_cycle_start = task_cycle_get_32();
@@ -574,12 +617,15 @@ void main() {
             gpioOutputSet(GREEN_LED, 0);
             flag = true;
             }
+		checkpoint(111);
 
 		/* fetch the control states */
 		scan_controls();
+		checkpoint(112);
 
 		/* Process Buttons (default mode is toggle) */
 		state_loop();
+		checkpoint(113);
 
         /* wait a while to loop again, less the time spent in loop */
 	   	time_stop = task_tick_get_32();
@@ -591,9 +637,11 @@ void main() {
 	   	} else if (SLEEPTICKS <= (time_stop - time_start)) {
 	        /* no sleep for the busy */
 	   	} else {
+			checkpoint_v(114,time_stop - time_start);
 	   		/* sleep the balance, rounding down one tick */
-	        task_sleep(SLEEPTICKS - (time_stop - time_start) - 1);
+	        task_sleep(SLEEPTICKS - (time_stop - time_start));
         }
+		checkpoint(115);
     }
 }
 
