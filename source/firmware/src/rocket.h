@@ -29,20 +29,20 @@ typedef char boolean;
 #define IO_JOYSTICK_ENABLE			true	// enable the joystick for X-Y
 #define IO_LCD_ENABLE 				true	// enable the LCD display
 #define IO_LED_BACKPACK_ENABLE		true	// enable the Adafruit LED i2c backback device
-#define IO_TRACKER_LOCAL_ENABLE		true	// enable the Pan&Tilt 'antenna' device
+#define IO_TRACKER_LOCAL_ENABLE		true	// enable the Pan&Tilt 'antenae' device
 #define IO_TRACKER_FOLLOW_ENABLE	true	// enable the 'antenna' tracking movement
-#define IO_MOTOR_ENABLE				true	// enable the motors
 
+#define IO_MOTOR_ENABLE				true	// enable the motors
 #define IO_REMOTE_ENABLE			true	// enable the sister i2c-slave board
 											// NOTE: the connection and remote board must be up else we will hang in "setup.c"
 #define IO_LEDS_REMOTE_ENABLE		true	// enable the remote LED space lighting
 #define IO_NEO_REMOTE_ENABLE		true	// enable the remote NeoPixels space lighting
 #define IO_SOUND_REMOTE_ENABLE		true	// enable the remote sound effects device
-#define IO_TRACKER_REMOTE_ENABLE	false	// enable the remote Pan&Tilt 'antenna' device
-#define IO_LEDRGB_REMOTE_ENABLE		false	// enable the remote LED_RGB 'antenna status' device
+#define IO_TRACKER_REMOTE_ENABLE	false	// enable the remote Pan&Tilt 'antenae' device
+#define IO_LEDRGB_REMOTE_ENABLE		false	// enable the remote LED_RGB 'antenae status' device
 
 // Debugging
-#define DEBUG_TIMING_ENABLE			true	// enable the timing measurements for QOS
+#define DEBUG_TIMING_ENABLE			false	// enable the timing measurements for QOS
 #define DEBUG_GAME_AT_START			false	// for game play testing, assume rocket already at start position
 
 // Specific installed joystick hardware
@@ -95,8 +95,8 @@ typedef char boolean;
 #define GAME_DISPLAY_RAW_STEPS 3
 
 /* specify which Arduino connector pin is used as input, output and LED */
-#define INPUT_A_PIN   3
-#define INPUT_B_PIN   7	// 5
+#define INPUT_A_PIN   3	// RED (next, stop)
+#define INPUT_B_PIN   7	// GREEN (select, go)
 #define GREEN_LED    13  // D13 is the on-board LED
 #define JOYSTICK_A_PIN  0 /* A0 */
 #define JOYSTICK_B_PIN  1 /* A1 */
@@ -191,6 +191,9 @@ struct ROCKET_GAME_S {
 	int32_t	start_option;		// selected start option
 	int32_t	play_display_mode;	// selected play display format
 	int32_t	game_mode;			// selected play or simulate
+	int32_t	check_point_now;	// runtime checkpointd
+	int32_t	check_point_prev;	// runtime checkpoint previous
+	int32_t	check_point_value;	// runtime checkpoint value snapshot
 };
 
 struct ROCKET_CONTROL_S {
@@ -230,6 +233,7 @@ extern struct device *i2c;
 extern void log(char *message);
 extern void log_val(char *format, void *val);
 extern int32_t abs(int32_t val);
+extern void checkpoint(int32_t checkpoint);
 
 void send_LED_Backpack(uint32_t x);
 void send_rocket_display(uint8_t *buffer,uint8_t i2c_len);
