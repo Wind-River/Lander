@@ -26,12 +26,15 @@
 #define STATE_NO_MENU_TEXT   0x0080		// this state does not have menu labels for the buttons
 #define STATE_NOT_FOUND         999
 
-// reverse the button menus if the buttons been reversed on the panel
+// reverse the button menus if the green button (B) is placed on the left,
 // unless this state has STATE_NO_MENU_TEXT set
 #define STATE_REVERSE_MENUS  true
 
-#define ACTION_NOP NULL	// no callback action
-#define STATE_NOP  NULL // no next state
+#define ACTION_NOP 		NULL			// no callback action
+#define STATE_NOP		NULL 			// no next state
+#define STATE_INHERIT_S	"<INHERIT>"		// inherit button #1 state from parent
+#define STATE_INHERIT_1	((char *)1L)	// inherit button #1 state from parent
+#define STATE_INHERIT_2	((char *)2L)	// inherit button #2 state from parent
 
 #define LCD_BUFFER_1  1 // top line of LCD
 #define LCD_BUFFER_2  2 // bottom line of LCD
@@ -43,9 +46,9 @@ struct StateGuiRec {
 	char		display_2[LCD_DISPLAY_POS_MAX+100]; 	// Display string Line 2 (16 chars)
 	char*		k1;			// Key1 goto state name (Use <STATE_NOP> for no action)
 	char*		k2;			// Key2 goto state name
-	char*		state_enter; // Callback on state entry (Use <ACTION_NOP> for no action)
-	char*		state_loop;	// Callback on state loop
-	char*		state_exit;	// Callback on state exit
+	void		(*state_enter)(); // Callback on state entry (Use <ACTION_NOP> for no action)
+	void		(*state_loop)();	// Callback on state loop
+	void		(*state_exit)();	// Callback on state exit
 };
 
 //extern int32_t state_now;
