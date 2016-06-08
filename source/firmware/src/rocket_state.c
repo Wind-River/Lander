@@ -125,10 +125,10 @@ static void display_state() {
 	if (0 < strlen(display_1)) {
 		// pad if not empty
 		sprintf(r_control.lcd_line0,"%-16s",display_1);
-	} else { 
+	} else {
 		display_1[0] = '\0';
 	}
-	
+
 	if (0 < strlen(display_2))
 		// pad and/or reverse if not empty
 		if (STATE_REVERSE_MENUS) {
@@ -139,22 +139,22 @@ static void display_state() {
 			// Case 4: one long string
 			// Case 5: no strings, just spaces (e.g. pass through states)
 			uint8_t first_space=0,last_space=15,i;
-	
+
 			for (i=0;i<=32;i++) buffer[i]=' ';
 			sprintf(&buffer[16],"%-16s",display_2);
-	
+
 			while ((' ' != buffer[16+first_space]) && (first_space<16)) first_space++;
 			while ((' ' != buffer[16+last_space ]) && (last_space > 0)) last_space--;
-	
+
 			if (first_space > 0)
 				strncpy(&buffer[16-first_space],&buffer[16],first_space);
-	
+
 			if ((last_space < 15) && (last_space >= first_space))
 				strncpy(buffer,&buffer[16+last_space+1],15-last_space);
-	
+
 			if (first_space < last_space)
 				strncpy(&buffer[15-last_space],&buffer[16+first_space],last_space-first_space+1);
-	
+
 			buffer[16]='\0';
 			strcpy(r_control.lcd_line1,buffer);
 		} else {
@@ -691,25 +691,75 @@ static void S_Test_Motor_Status_loop () {
 
 /**** GAME PLAY ********************************************************/
 
-static void updateLedDisplays () {
+static int32_t calculateSpeed () {
+	int32_t speed;
+	speed = abs(r_space.rocket_delta_x) + 
+	        abs(r_space.rocket_delta_y) + 
+	        abs(r_space.rocket_delta_z);
+	speed *= (int32_t) FRAMES_PER_SECOND;
+	return(speed);
+}
 
+#define LCD_COLOR_STATE_NORMAL  0
+#define LCD_COLOR_STATE_GOOD    1
+#define LCD_COLOR_STATE_WARN    2
+#define LCD_COLOR_STATE_BAD     3
+#define LCD_COLOR_STATE_DANGER  4
+uint8_t lcdColorState=LCD_COLOR_STATE_NORMAL;
+
+static void updateLedDisplays (int32_t speed) {
 	// show fuel
 	send_LED_Backpack(r_space.rocket_fuel);
 	// show height
 	send_Led1(r_space.rocket_z/SCALE_GAME_UMETER_TO_MOON_METER);
 	// show speed
-	if (GAME_XYZ_MOVE != r_game.game) {
-		send_Led2((r_space.rocket_delta_x+r_space.rocket_delta_y+r_space.rocket_delta_z)/SCALE_GAME_UMETER_TO_MOON_METER);
+	send_Led2(speed);
+
+	// Refelect status in LCD background color
+	uint8_t lcdColorState_new;
+	if ((r_space.rocket_z > 300000L) || (r_space.rocket_delta_z >= 0L)) {
+		//above 10 cm, so ok
+		lcdColorState_new=LCD_COLOR_STATE_GOOD;
+	} else if (r_space.rocket_z > 150000L) {
+		if (speed >= SAFE_UMETER_PER_SECOND*3L) {
+			lcdColorState_new=LCD_COLOR_STATE_DANGER;
+		} else if (speed >= (SAFE_UMETER_PER_SECOND*2L)) {
+			lcdColorState_new=LCD_COLOR_STATE_BAD;
+		} else if (speed >= SAFE_UMETER_PER_SECOND) {
+			lcdColorState_new=LCD_COLOR_STATE_WARN;
+		} else {
+			lcdColorState_new=LCD_COLOR_STATE_GOOD;
+		}
 	} else {
-		int32_t psuedo_speed=0;
-		if (JOYSTICK_DELTA_XY_MIN < abs(r_space.thrust_x))
-			psuedo_speed += abs(r_space.thrust_x) - JOYSTICK_DELTA_XY_MIN;
-		if (JOYSTICK_DELTA_XY_MIN < abs(r_space.thrust_y))
-			psuedo_speed += abs(r_space.thrust_y) - JOYSTICK_DELTA_XY_MIN;
-		if (JOYSTICK_DELTA_Z_MIN < abs(r_space.thrust_z))
-			psuedo_speed += abs(r_space.thrust_z) - JOYSTICK_DELTA_Z_MIN;
-		if (999 < psuedo_speed) psuedo_speed = 999;
-		send_Led2(psuedo_speed);
+		if (speed >= SAFE_UMETER_PER_SECOND) {
+			lcdColorState_new=LCD_COLOR_STATE_DANGER;
+		} else if (speed >= ((SAFE_UMETER_PER_SECOND * 8L)/ 10L)) {
+			lcdColorState_new=LCD_COLOR_STATE_BAD;
+		} else if (speed >= ((SAFE_UMETER_PER_SECOND * 6L)/ 10L)) {
+			lcdColorState_new=LCD_COLOR_STATE_WARN;
+		} else {
+			lcdColorState_new=LCD_COLOR_STATE_GOOD;
+		}
+	}
+	if (lcdColorState != lcdColorState_new) {
+		lcdColorState = lcdColorState_new;
+	    switch(lcdColorState) {
+	        case LCD_COLOR_STATE_GOOD:
+           		groveLcdColorSet(i2c, 0, 200, 100);	// light green
+	            break;
+	        case LCD_COLOR_STATE_WARN:
+           		groveLcdColorSet(i2c, 200, 200, 0);	// yellow
+	            break;
+	        case LCD_COLOR_STATE_BAD:
+           		groveLcdColorSet(i2c, 200, 100, 0);	// orange
+	            break;
+	        case LCD_COLOR_STATE_DANGER:
+           		groveLcdColorSet(i2c, 200, 20, 20);	// red
+	            break;
+	        default:
+           		groveLcdColorSet(i2c, 0, 100, 200);
+	            break;
+	    }
 	}
 }
 
@@ -749,6 +799,10 @@ static void S_Game_Start_enter () {
 	seg_writeDigitNum(4, 0x10, 0); /* 'L' */
 	bp_writeDisplay();
 	checkpoint(10104);
+	
+	// preset LCD color status
+	lcdColorState=LCD_COLOR_STATE_NORMAL;
+
 
 
 	// fly the rocket to game start position
@@ -759,15 +813,23 @@ static void S_Game_Start_enter () {
 }
 
 static void S_Game_Ready_enter () {
+	checkpoint(10106);
 	// start the show
 	send_Sound(SOUND_PLAY);
 	send_NeoPixel(NEOPIXEL_PLAY);
-	updateLedDisplays();
+	updateLedDisplays(0L);
 
-	next_state("S_Game_Play");
+	// wait 2 seconds before we actually start
+	flight_wait(FRAMES_PER_SECOND * 2);
+	r_flight.state_done="S_Game_Play";
+	next_state("S_Flight_Wait");
+	checkpoint(10107);
+//	next_state("S_Game_Play");
 }
 
 static void S_Game_Play_loop () {
+	int32_t speed;
+	
 	checkpoint(10200);
 
 	// compute the rocket position
@@ -791,6 +853,9 @@ static void S_Game_Play_loop () {
 		}
 	}
 
+	// compute rocket speed
+	speed = calculateSpeed();
+	
 	// display the rocket state
 	if        (GAME_DISPLAY_RAW_XYZF  == r_game.play_display_mode) {
 		// display the rocket state
@@ -818,20 +883,21 @@ static void S_Game_Play_loop () {
 		set_lcd_display(LCD_BUFFER_2,buffer);
 		display_state();
 	} else {
-		sprintf(buffer,"XYZ=%02d,%03d,%03d",
-			r_space.rocket_z/1000 /*SCALE_GAME_UMETER_TO_MOON_CMETER*/,
-			r_space.rocket_x/1000 /*SCALE_GAME_UMETER_TO_MOON_CMETER*/,
-			r_space.rocket_y/1000 /*SCALE_GAME_UMETER_TO_MOON_CMETER*/
+		sprintf(buffer,"XYZ=%03d,%03d,%03d",
+			r_space.rocket_x/SCALE_GAME_UMETER_TO_MOON_METER,
+			r_space.rocket_y/SCALE_GAME_UMETER_TO_MOON_METER,
+			r_space.rocket_z/SCALE_GAME_UMETER_TO_MOON_METER
 			);
 		set_lcd_display(LCD_BUFFER_1,buffer);
-		sprintf(buffer,"S=%05d F=%04d",r_space.rocket_delta_z/1000,r_space.rocket_fuel);
+		if (0L < r_space.rocket_delta_z) speed = -speed;	// show upward motion as negative speed
+		sprintf(buffer,"S=%04d F=%04d",speed/SCALE_GAME_UMETER_TO_MOON_METER,r_space.rocket_fuel);
 		set_lcd_display(LCD_BUFFER_2,buffer);
 		display_state();
 	}
 	checkpoint(10204);
 
 	// update the displays
-	updateLedDisplays();
+	updateLedDisplays(speed);
 	checkpoint(10205);
 }
 
@@ -840,9 +906,16 @@ int32_t win_timethen = 0L;
 int16_t score = 0;
 
 static void S_Game_Done_enter () {
+	int32_t speed = calculateSpeed();
+
+	// reset the LCD backgroun color
+	groveLcdColorSet(i2c, 0, 100, 200);
+
 	win_timeout = (10L * sys_clock_ticks_per_sec);
-	if (SAFE_UMETER_PER_SECOND < abs(r_space.rocket_delta_z)) {
-		sprintf(buffer,"CRASH :-( S=%04d",abs(r_space.rocket_delta_z));
+	set_lcd_display(LCD_BUFFER_2,"Main      Replay");
+
+	if (SAFE_UMETER_PER_SECOND < speed) {
+		sprintf(buffer,"CRASH :-( S=%04d",speed/SCALE_GAME_UMETER_TO_MOON_METER);
 		// stop the show
 		send_Sound(SOUND_CRASH);
 		send_NeoPixel(NEOPIXEL_CRASH);
@@ -856,7 +929,7 @@ static void S_Game_Done_enter () {
 
 		if (IO_WINNING_SCORE) {
 			if (highest_score < score) {
-				win_timeout = (2L * sys_clock_ticks_per_sec);
+				win_timeout = (4L * sys_clock_ticks_per_sec);
 				set_lcd_display(LCD_BUFFER_2,"!NEW HIGH SCORE!");
 			}
 		}
@@ -872,13 +945,14 @@ static void S_Game_Done_loop () {
 
 		if (highest_score < score) {
 			highest_score = score;
-			next_state("S_Name_Select");
+			flight_linear(ROCKET_HOME_X,ROCKET_HOME_Y,ROCKET_HOME_Z, MOTOR_SPEED_AUTO);
+			r_flight.state_done="S_Name_Select";
+			next_state("S_Flight_Linear");
 		} else {
 			next_state("S_Main_GoHome");
 		}
 
 	}
-
 }
 
 static void S_Game_Panic_enter () {
