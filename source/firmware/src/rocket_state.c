@@ -713,7 +713,7 @@ static void updateLedDisplays (int32_t speed) {
 	// show height
 	send_Led1(r_space.rocket_z/SCALE_GAME_UMETER_TO_MOON_METER);
 	// show speed
-	send_Led2(speed);
+	send_Led2(abs(speed)/SCALE_GAME_UMETER_TO_MOON_METER);
 
 	// Refelect status in LCD background color
 	uint8_t lcdColorState_new;
@@ -909,6 +909,7 @@ static void S_Game_Done_enter () {
 	int32_t speed = calculateSpeed();
 
 	// reset the LCD backgroun color
+	groveLcdInit(i2c);
 	groveLcdColorSet(i2c, 0, 100, 200);
 
 	win_timeout = (10L * sys_clock_ticks_per_sec);
