@@ -105,7 +105,18 @@ typedef char boolean;
 #define LCD_DISPLAY_POS_MAX 16
 
 /* Joystick Configure */
-#ifdef IO_GROVE_JOYSTICK_ENABLE	// Grove X-Y reostats
+#if IO_GROVE_JOYSTICK_ENABLE == true	// Grove X-Y reostats
+#define JOYSTICK_X_PORT 0
+#define JOYSTICK_Y_PORT 1
+#define JOYSTICK_X_MIN 200
+#define JOYSTICK_X_MID (400+414)/2	// center has hysterisis
+#define JOYSTICK_X_MAX 650
+#define JOYSTICK_Y_MIN 200
+#define JOYSTICK_Y_MID (380+413)/2
+#define JOYSTICK_Y_MAX 650
+#define JOYSTICK_DELTA_XY_MIN 40	// no move at center value zone
+#endif
+#if IO_ADAFRUIT_JOYSTICK_ENABLE == true // Adafruit arcade X-Y toggle switches
 #define JOYSTICK_X_PORT 0
 #define JOYSTICK_Y_PORT 1
 #define JOYSTICK_X_MIN 200
@@ -116,19 +127,8 @@ typedef char boolean;
 #define JOYSTICK_Y_MAX 650
 #define JOYSTICK_DELTA_XY_MIN 40	// no move at center value zone
 #endif
-#ifdef IO_ADAFRUIT_JOYSTICK_ENABLE // Adafruit arcade X-Y toggle switches
-#define JOYSTICK_X_PORT 0
-#define JOYSTICK_Y_PORT 1
-#define JOYSTICK_X_MIN 200
-#define JOYSTICK_X_MID 413
-#define JOYSTICK_X_MAX 650
-#define JOYSTICK_Y_MIN 200
-#define JOYSTICK_Y_MID 413
-#define JOYSTICK_Y_MAX 650
 #define JOYSTICK_HIGH_MIN 	500		// the high toggle is > 2/3
-#define JOYSTICK_LOW_MIN 	200		// the high toggle is > 1/3 (else off)
-#define JOYSTICK_DELTA_XY_MIN 40	// no move at center value zone
-#endif
+#define JOYSTICK_LOW_MIN 	275		// the high toggle is > 1/3 (else off)
 
 /* Slider Configure */
 #define JOYSTICK_Z_PORT 2
