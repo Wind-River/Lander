@@ -265,13 +265,14 @@ void scan_controls () {
 
 		if (IO_ADAFRUIT_JOYSTICK_ENABLE) {
 			// map toggle resister array to equivalent reostat values
+			// Center values (no closed switches) are pulled to ground
 			if      (r_control.analog_x<                100) r_control.analog_x = JOYSTICK_X_MID;
 			else if (JOYSTICK_HIGH_MIN < r_control.analog_x) r_control.analog_x = JOYSTICK_X_MID + JOYSTICK_DELTA_XY_MIN + 40;
-			else if (JOYSTICK_LOW_MIN  < r_control.analog_x) r_control.analog_x = JOYSTICK_X_MID - JOYSTICK_DELTA_XY_MIN - 40;
+			else if (JOYSTICK_LOW_MIN  > r_control.analog_x) r_control.analog_x = JOYSTICK_X_MID - JOYSTICK_DELTA_XY_MIN - 40;
 			else                                             r_control.analog_x = JOYSTICK_X_MID;
 			if      (r_control.analog_y<                100) r_control.analog_y = JOYSTICK_Y_MID;
 			else if (JOYSTICK_HIGH_MIN < r_control.analog_y) r_control.analog_y = JOYSTICK_Y_MID + JOYSTICK_DELTA_XY_MIN + 40;
-			else if (JOYSTICK_LOW_MIN  < r_control.analog_y) r_control.analog_y = JOYSTICK_Y_MID - JOYSTICK_DELTA_XY_MIN - 40;
+			else if (JOYSTICK_LOW_MIN  > r_control.analog_y) r_control.analog_y = JOYSTICK_Y_MID - JOYSTICK_DELTA_XY_MIN - 40;
 			else                                             r_control.analog_y = JOYSTICK_Y_MID;
 		}
 
@@ -290,9 +291,11 @@ void scan_controls () {
  */
 
 void send_LED_Backpack(uint32_t x) {
+	checkpoint(401);
 	if (IO_LED_BACKPACK_ENABLE) {
 		seg_writeNumber(x);
 	}
+	checkpoint(402);
 }
 
 
@@ -574,7 +577,7 @@ void main() {
    	uint32_t time_start,time_stop;
 	uint32_t time_cycle_start,time_cycle_stop;
 
-	checkpoint(0x0101);
+	checkpoint(101);
 	
 	init_main();
 	init_state();
@@ -652,8 +655,12 @@ void main() {
  * @param cb_type can be ADC_CB_DONE or ADC_CB_ERROR
  */
 void adcCallback (struct device *dev, enum adc_callback_type cb_type) {
+	checkpoint(301);
     if (dev == adc && cb_type == ADC_CB_DONE)
         {
+		checkpoint(302);
         isr_event_send(ADCREADY);
+		checkpoint(303);
 		}
+	checkpoint(304);
 }
