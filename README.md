@@ -6,8 +6,6 @@ We will present a physical interactive model of the famous LEM Lander game, wher
 
 The license for this project is the Apache-2.0. Text of Apache-2.0 license and other applicable license notices can be found in the LICENSE-NOTICES.txt file in the top level directory. Each source files should include a license notice that designates the licensing terms for the respective file.
 
-### Prerequisites
-
 ### Materials Used
 
  * Galileo 2 running the Rocket (Zephyr) OS
