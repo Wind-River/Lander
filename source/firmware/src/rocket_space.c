@@ -1,19 +1,23 @@
 /* rocket_space.c - Rocket Lander Game */
 
-/* <legal-notice>
+/*
+ *  Copyright (c) 2016 Wind River Systems, Inc.
  *
- * Copyright (c) 2016 Wind River Systems, Inc.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at:
+ *       http://www.apache.org/licenses/LICENSE-2.0
  *
- * This software has been developed and/or maintained under the Wind River
- * CodeSwap program. The right to copy, distribute, modify, or otherwise
- * make use of this software may be licensed only pursuant to the terms
- * of an applicable Wind River license agreement.
- *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ */
+
+/*
  * <credits>
  *   { David Reyna,  david.reyna@windriver.com,  },
  * </credits>
  *
- * </legal-notice>
  */
 
 /*
@@ -488,7 +492,7 @@ void set_rocket_position ()
 	if (IO_MOTOR_ENABLE && (GAME_SIMULATE != r_game.game_mode)) {
 		rocket_position_send();
 		rocket_command_send(ROCKET_MOTOR_CMD_PRESET);
- 
+
 	}
 	if (IO_TRACKER_FOLLOW_ENABLE) {
  		// update Antennae
@@ -555,7 +559,7 @@ void move_rocket_next_position ()
 				r_towers[ROCKET_TOWER_SE].step_diff);
 		    }
 	}
-	
+
 	// update Antennae
 	if (IO_TRACKER_FOLLOW_ENABLE) {
 		antenna_update();
@@ -643,7 +647,7 @@ void rocket_position_send ()
 void ground_position_send ()
  {
 	uint8_t buf[10];
-	
+
 	for (uint8_t i=0;i<ROCKET_GROUND_MAX;i++) {
 		if (r_ground[i].step_count != r_ground[i].step_goal) {
 			buf[0]=(uint8_t) ((i+4) / 10) + '0';

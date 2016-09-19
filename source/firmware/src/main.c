@@ -1,21 +1,24 @@
 /* main.c - Rocket Lander Game */
 
-/* <legal-notice>
+/*
+ *  Copyright (c) 2016 Wind River Systems, Inc.
  *
- * Copyright (c) 2016 Wind River Systems, Inc.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at:
+ *       http://www.apache.org/licenses/LICENSE-2.0
  *
- * This software has been developed and/or maintained under the Wind River 
- * CodeSwap program. The right to copy, distribute, modify, or otherwise 
- * make use of this software may be licensed only pursuant to the terms
- * of an applicable Wind River license agreement.
- * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ */
+
+/*
  * <credits>
  *   { David Reyna,  david.reyna@windriver.com,  },
  * </credits>
  *
- * </legal-notice>
  */
- 
 
 /*
  * Theory of Implementation
@@ -105,16 +108,16 @@ int32_t abs(int32_t val) {
  * Checkpoint support: capture check points as the code executes, latest and previous
  *
  *  This provides a passive context when the code gets lost, especially if the
- *  OS is in an idle state and there is no stack trace available back 
+ *  OS is in an idle state and there is no stack trace available back
  *  into the code.
  *
  *  The checkpoint value is in decimal (the native format of the debugger), where
  *  the 6 digits are:   xxxxxx
- *                          ^^= the sub-checkpoints in a given sub-routine 
- *                        ^^  = the sub-routine 
- *                      ^^    = the file 
+ *                          ^^= the sub-checkpoints in a given sub-routine
+ *                        ^^  = the sub-routine
+ *                      ^^    = the file
  */
- 
+
  /* checkpoints to help track where code code got lost without a thread to pause */
 void checkpoint_v(int32_t check_num, int32_t check_value) {
 	r_game.check_point_prev = r_game.check_point_now;
@@ -432,7 +435,7 @@ void send_high_score(char *msg) {
 		buf[i+1] = (uint8_t) msg[i];
 	}
 	buf[i+1]='\0';
-	
+
 	send_rocket_display(buf,2+strlen(msg));
 }
 
@@ -530,7 +533,7 @@ void init_main() {
  * main - Rocket Lander
  *
  */
- 
+
  void main_time_test(uint32_t time_start,uint32_t time_stop,uint32_t time_cycle_start,uint32_t time_cycle_stop) {
 	static uint32_t time_sum = 0L;
 	static uint32_t time_cnt = 0L;
@@ -539,9 +542,9 @@ void init_main() {
 	static uint32_t time_max3 = 0L;
 	static uint32_t time_max2 = 0L;
 	static uint32_t time_max1 = 0L;
-	
+
 	uint32_t time_diff = 0;
-	
+
 	if (DEBUG_TIMING_ENABLE) {
 		time_cnt++;
 		if (time_cnt > 0) {
@@ -551,7 +554,7 @@ void init_main() {
 				time_cycle_cnt++;
 				time_cycle_sum += time_cycle_stop - time_cycle_start;
 			}
-			
+
 			if (time_diff > time_max3) {
 			    time_max1 = time_max2;
 			    time_max2 = time_max3;
@@ -562,7 +565,7 @@ void init_main() {
 			} else if (time_diff > time_max1) {
 			    time_max1 = time_diff;
 			}
-	
+
 			// display time ave every 64 * 1/5 second ~= 13 seconds
 			if (0x0000 == (time_cnt & 0x003f)) {
 				//PRINT("*** Main_Time(%ld) = %ld:%ld / %ld, %ld < %ld < %ld\n",time_cnt,time_sum/time_cnt,time_cycle_sum/time_cycle_cnt,sys_clock_ticks_per_sec,time_max3,time_max2,time_max1);
@@ -578,7 +581,7 @@ void main() {
 	uint32_t time_cycle_start,time_cycle_stop;
 
 	checkpoint(101);
-	
+
 	init_main();
 	init_state();
 

@@ -1,19 +1,22 @@
 /* rocket_state.c - Rocket Lander Game */
 
-/* <legal-notice>
+/*
+ *  Copyright (c) 2016 Wind River Systems, Inc.
  *
- * Copyright (c) 2016 Wind River Systems, Inc.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at:
+ *       http://www.apache.org/licenses/LICENSE-2.0
  *
- * This software has been developed and/or maintained under the Wind River
- * CodeSwap program. The right to copy, distribute, modify, or otherwise
- * make use of this software may be licensed only pursuant to the terms
- * of an applicable Wind River license agreement.
- *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ */
+
+/*
  * <credits>
  *   { David Reyna,  david.reyna@windriver.com,  },
  * </credits>
- *
- * </legal-notice>
  */
 
 /*
@@ -693,8 +696,8 @@ static void S_Test_Motor_Status_loop () {
 
 static int32_t calculateSpeed () {
 	int32_t speed;
-	speed = abs(r_space.rocket_delta_x) + 
-	        abs(r_space.rocket_delta_y) + 
+	speed = abs(r_space.rocket_delta_x) +
+	        abs(r_space.rocket_delta_y) +
 	        abs(r_space.rocket_delta_z);
 	speed *= (int32_t) FRAMES_PER_SECOND;
 	return(speed);
@@ -799,7 +802,7 @@ static void S_Game_Start_enter () {
 	seg_writeDigitNum(4, 0x10, 0); /* 'L' */
 	bp_writeDisplay();
 	checkpoint(10104);
-	
+
 	// preset LCD color status
 	lcdColorState=LCD_COLOR_STATE_NORMAL;
 
@@ -829,7 +832,7 @@ static void S_Game_Ready_enter () {
 
 static void S_Game_Play_loop () {
 	int32_t speed;
-	
+
 	checkpoint(10200);
 
 	// compute the rocket position
@@ -855,7 +858,7 @@ static void S_Game_Play_loop () {
 
 	// compute rocket speed
 	speed = calculateSpeed();
-	
+
 	// display the rocket state
 	if        (GAME_DISPLAY_RAW_XYZF  == r_game.play_display_mode) {
 		// display the rocket state

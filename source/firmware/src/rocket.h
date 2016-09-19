@@ -1,21 +1,25 @@
 /* rocket.h - Rocket Lander Game */
 
-/* <legal-notice>
+/*
+ *  Copyright (c) 2016 Wind River Systems, Inc.
  *
- * Copyright (c) 2016 Wind River Systems, Inc.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at:
+ *       http://www.apache.org/licenses/LICENSE-2.0
  *
- * This software has been developed and/or maintained under the Wind River 
- * CodeSwap program. The right to copy, distribute, modify, or otherwise 
- * make use of this software may be licensed only pursuant to the terms
- * of an applicable Wind River license agreement.
- * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ */
+
+/*
  * <credits>
  *   { David Reyna,  david.reyna@windriver.com,  },
  * </credits>
  *
- * </legal-notice>
  */
- 
+
 #ifndef boolean
 typedef char boolean;
 #endif
@@ -176,7 +180,7 @@ typedef char boolean;
 #define TILT_MID	((TILT_P90+TILT_P00)/2)
 
 /* Game Mode */
-#define GAME_PLAY		0x01	// normal game play with motor motion	
+#define GAME_PLAY		0x01	// normal game play with motor motion
 #define GAME_SIMULATE	0x22	// simulated play, no motors, already at start
 #define GAME_AT_START	0x20	// assume rocket already at start position
 
