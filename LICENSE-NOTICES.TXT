@@ -183,7 +183,9 @@ Rocket_Lander_Rev1.fzz
 
 Copyright (c) 2016 Wind River
 
-The Rocket_Lander_Rev1 schematic diagram was created using Fritzing GUI tools and its standard libraries and is licensed under Create Commons (CC) Attribution-ShareALike license. A link to the license text can be found here: 
+The Rocket_Lander_Rev1 schematic diagram was created using Fritzing GUI tools 
+and its standard libraries and is licensed under the Creative Commons (CC) 
+Attribution-ShareALike license. A link to the license text can be found here: 
    https://creativecommons.org/licenses/by-sa/3.0/
    
 The link to the Fritzing website at the time of its creation can be found here:
