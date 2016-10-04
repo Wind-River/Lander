@@ -1,6 +1,6 @@
 ### Overview
 
-We will present a physical interactive model of the famous LEM Lander game, where the user attempts to land a Rocket model (suspended from a four tower cable system) that has limited fuel onto a crater-filled lunar surface.  The game has outputs to indicate the speed, altitude, and fuel level remaining, together with light and sound effects. There will be a physical controller, with a smart phone controller also planned (via XDK).
+We will present a physical interactive model of the famous LEM Lander game, where the user attempts to land a Rocket model (suspended from a four tower cable system) that has limited fuel onto a crater-filled lunar surface.  The game has outputs to indicate the speed, altitude, and fuel level remaining, together with light and sound effects. There will be physical controller inputs for the thrust and direction, plus controls for the game play.
 
 ### License
 
@@ -8,7 +8,7 @@ The license for this project is the Apache-2.0. Text of Apache-2.0 license and o
 
 ### Materials Used
 
- * Galileo 2 running the Rocket (Zephyr) OS
+ * Galileo Rev2 running the Rocket (Zephyr) OS
  * Two Arduino Coprocessors 
  * 4 Stepper Motors and Drivers 
  * I2C LCD Display
@@ -20,7 +20,13 @@ The license for this project is the Apache-2.0. Text of Apache-2.0 license and o
  * Arcade Joystick, Buttons, and Slider Controls
  * AC power for a power strip connection
  * An internet connection (for Helix Application Cloud)
- * W=36”, D=24”, H=24” (24” square play field together with a laptop to run and show Helix)
+ * W=36”, D=24”, H=24” (24” square play field together with a laptop to run Helix)
+
+### Software Used
+
+  * Wind River Helix Application Cloud (HAC), open registration
+    * http://app.cloud.windriver.com
+  * Helix Application Cloud, sample application "Grove-LCD"
 
 #### CAD and STL
  * All STL files are located in the /cad directory
