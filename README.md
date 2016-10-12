@@ -24,7 +24,7 @@ Disclaimer of Warranty / No Support: Wind River does not provide support and mai
  * Arcade Joystick, Buttons, and Slider Controls
  * AC power for a power strip connection
  * An internet connection (for Helix Application Cloud)
- * W=36”, D=24”, H=24” (24” square play field together with a laptop to run Helix)
+ * W=28”, D=20”, H=24” play field
 
 ### Software Used
 
@@ -67,9 +67,9 @@ Disclaimer of Warranty / No Support: Wind River does not provide support and mai
     * Install code from the "source/satelliteware/rocket_motor"
     * Connect to the motor driver circuit board
   * Assemble the play field with the towers, stepper motors, fish line cables, and the model rocket:
-    * cut a board to 28 inches by 40 inches for the playing field
+    * cut a board to 28 inches by 22 inches for the playing field
     * cut four 1/2 inch square aluminum rods to 24 inches, to be the line towers
-    * 3D print the four rod/motor mounts, and install on the playing field at 24 inches by 36 inches
+    * 3D print the four rod/motor mounts, and install on the playing field at 24 inches by 18 inches
     * 3D print the four spool cylinders and attach to the stepper motors
     * 3D print the four line rollers, and install at the top of the four towers
     * 3D print the rocket model, or provide a desired alternative
