@@ -1,0 +1,694 @@
+SPDXVersion: SPDX-1.2
+DataLicense: CC0-1.0
+DocumentComment: <text>This file contains Low Definition SPDX data. Low Definition data is created by using only computer automation analysis on the source code files contained in the package. That is, no human experts participated in the source code analysis. The quality of the data is lower compared to human analyzed packages and therefore we use the name Low Definition (aka Low Def). Although we continuously work to improve the quality by adding and/or improving various heuristics, and accessing different databases and rule-based systems, the quality is bounded by what can be achieved by way of computer automation. Please send your feedback to: spdx@WindRiver.com.  DISCLAIMER: This document is provided "as is" without any warranty whatsoever. This documentation may not be referenced or relied upon for its accuracy or comprehensiveness, or to determine legal obligations with respect to open source code contained in the software package it represents. Such determinations should be based upon recipient's independent legal analysis and by reference to the notices and licenses contained within the open source code itself. Wind River may change the contents of this document at any time at its sole discretion, and Wind River shall have no liability whatsoever arising from recipient's use of this information. </text>
+
+##-------------------------
+## Creation Information
+##-------------------------
+
+Creator: Tool: The Duke of Highlander
+Created: 2016-10-13T06:31:30Z
+CreatorComment: <text> DISCLAIMER: This document is provided "as is" without any warranty whatsoever. This documentation may not be referenced or relied upon for its accuracy or comprehensiveness, or to determine legal obligations with respect to open source code contained in the software package it represents. Such determinations should be based upon recipient's independent legal analysis and by reference to the notices and licenses contained within the open source code itself. Wind River may change the contents of this document at any time at its sole discretion, and Wind River shall have no liability whatsoever arising from recipient's use of this information.</text>
+LicenseListVersion: 1.19
+
+
+##-------------------------
+## Package Information
+##-------------------------
+
+PackageName: Lander-master-1.zip
+PackageFileName: Lander-master-1.zip
+PackageDownloadLocation: NOASSERTION
+PackageVerificationCode: 4dbf0b1ba464e917689a2669691522e1880e8af8
+PackageChecksum: SHA1: f860262a9a96e1cb8bfbcc35572251e2229d906e
+PackageLicenseConcluded: Apache-2.0
+PackageLicenseDeclared: Apache-2.0
+PackageLicenseInfoFromFiles: Python-2.0
+PackageLicenseInfoFromFiles: MPL-2.0
+PackageLicenseInfoFromFiles: MIT
+PackageLicenseInfoFromFiles: LGPL-2.0+
+PackageLicenseInfoFromFiles: CC-BY-SA-3.0
+PackageLicenseInfoFromFiles: BSD-2-Clause
+PackageLicenseInfoFromFiles: Artistic-1.0
+PackageLicenseInfoFromFiles: Apache-2.0
+PackageLicenseInfoFromFiles: LGPL-2.1+
+PackageCopyrightText: NOASSERTION
+
+
+
+##--------------------------
+## File Information
+##--------------------------
+
+FileName: /Lander-master/LICENSE-NOTICES.TXT
+FileType: OTHER
+FileChecksum: SHA1: 9428b52851d5f059e31e5d14997c67724aa5aa43
+LicenseConcluded: (Python-2.0 AND MPL-2.0 AND MIT AND LGPL-2.0+ AND CC-BY-SA-3.0 AND BSD-2-Clause AND Artistic-1.0 AND Apache-2.0)
+LicenseInfoInFile: Python-2.0
+LicenseInfoInFile: MPL-2.0
+LicenseInfoInFile: MIT
+LicenseInfoInFile: LGPL-2.0+
+LicenseInfoInFile: CC-BY-SA-3.0
+LicenseInfoInFile: BSD-2-Clause
+LicenseInfoInFile: Artistic-1.0
+LicenseInfoInFile: Apache-2.0
+FileCopyrightText: <text> http://www.adafruit.com/products/, http://www.fritzing.org/, https://creativecommons.org/licenses/by-sa/3.0/, http://www.apache.org/licenses/, copyright (c) 2016 wind river
+
+the rocket_lander_rev1 schematic diagram was created using fritzing gui tools , copyright owner. for the purposes of this definition, "submitted" </text>
+FileNotice: <text>  </text>
+
+##File
+
+FileName: /Lander-master/README.md
+FileType: OTHER
+FileChecksum: SHA1: a972c76d92a4cbaa576868584cc11fddae67c43b
+LicenseConcluded: NOASSERTION
+LicenseInfoInFile: NOASSERTION
+FileCopyrightText: <text> https://app.cloud.windriver.com), https://cad.onshape.com/documents/7df8b4dcfbc827b905a6e076, http://app.cloud.windriver.com </text>
+
+##File
+
+FileName: /Lander-master/Rocket_Lander_Rev1.fzz
+FileType: OTHER
+FileChecksum: SHA1: fd97755bd5f483d5170e60618facb5ad15df0b57
+LicenseConcluded: NOASSERTION
+LicenseInfoInFile: NOASSERTION
+FileCopyrightText: NOASSERTION
+
+##File
+
+FileName: /Lander-master/source/README.md
+FileType: OTHER
+FileChecksum: SHA1: 1301dda1ccb77e3c29f41e3cad31fd7f6e69d7b6
+LicenseConcluded: NOASSERTION
+LicenseInfoInFile: NOASSERTION
+FileCopyrightText: NOASSERTION
+
+##File
+
+FileName: /Lander-master/source/satelliteware/rocket_motor/rocket_motor_phase.ino
+FileType: OTHER
+FileChecksum: SHA1: aeae606b4f797fe83d5b0ac3649a125774a1fdf7
+LicenseConcluded: Apache-2.0
+LicenseInfoInFile: Apache-2.0
+FileCopyrightText: <text> http://www.apache.org/licenses/license-2.0, david.reyna@windriver.com, copyright (c) 2016 wind river systems, inc.
+ *
+ * licensed under the apache license, version 2.0 (the "license"); </text>
+
+##File
+
+FileName: /Lander-master/source/satelliteware/rocket_motor/rocket_motor_step.ino
+FileType: OTHER
+FileChecksum: SHA1: cbfd3ccb97239fa04be8f325398e77ee1cf00749
+LicenseConcluded: Apache-2.0
+LicenseInfoInFile: Apache-2.0
+FileCopyrightText: <text> http://www.apache.org/licenses/license-2.0, david.reyna@windriver.com, (c) same four bit select to 2x74ls151 demuxes for motor boundary switch , copyright (c) 2016 wind river systems, inc.
+ *
+ * licensed under the apache license, version 2.0 (the "license"); </text>
+
+##File
+
+FileName: /Lander-master/source/satelliteware/rocket_display/rocket_display.ino
+FileType: OTHER
+FileChecksum: SHA1: 4d071c5b978e3437fa9ea8d0e7c726dbf6e638cd
+LicenseConcluded: Apache-2.0
+LicenseInfoInFile: Apache-2.0
+FileCopyrightText: <text> http://www.apache.org/licenses/license-2.0, david.reyna@windriver.com, copyright (c) 2016 wind river systems, inc.
+ *
+ * licensed under the apache license, version 2.0 (the "license"); </text>
+
+##File
+
+FileName: /Lander-master/source/satelliteware/libraries/MicroAve/MicroAve.cpp
+FileType: SOURCE
+FileChecksum: SHA1: e244a49a236a120dfad48f3c75e0eb82ee54bf46
+LicenseConcluded: Apache-2.0
+LicenseInfoInFile: Apache-2.0
+FileCopyrightText: <text> http://www.apache.org/licenses/license-2.0, david.reyna@windriver.com, copyright (c) 2016 wind river systems, inc.
+ *
+ * licensed under the apache license, version 2.0 (the "license"); </text>
+
+##File
+
+FileName: /Lander-master/source/satelliteware/libraries/MicroAve/MicroAve.h
+FileType: SOURCE
+FileChecksum: SHA1: c79ae1811ab442be1d86a0997c38e4481b4c0b60
+LicenseConcluded: Apache-2.0
+LicenseInfoInFile: Apache-2.0
+FileCopyrightText: <text> http://www.apache.org/licenses/license-2.0, david.reyna@windriver.com, copyright (c) 2016 wind river systems, inc.
+ *
+ * licensed under the apache license, version 2.0 (the "license"); </text>
+
+##File
+
+FileName: /Lander-master/source/satelliteware/libraries/DigitalTube/README.txt
+FileType: OTHER
+FileChecksum: SHA1: ab20277ca6eaf305f8f495e44b6f4166aa530181
+LicenseConcluded: NOASSERTION
+LicenseInfoInFile: NOASSERTION
+FileCopyrightText: <text> author:frankie.chu at seeed studio.
+// date:april 9,2012 </text>
+
+##File
+
+FileName: /Lander-master/source/satelliteware/libraries/DigitalTube/TM1637.cpp
+FileType: SOURCE
+FileChecksum: SHA1: 14502eab240cb93335c8e39e22e5f56088498c72
+LicenseConcluded: LGPL-2.1+
+LicenseInfoInFile: LGPL-2.1+
+FileCopyrightText: <text> david.reyna@windriver.com, modified record:
+//    author: david.reyna@windriver.com, author:frankie.chu
+//  date:9 april,2012
+//
+//  this library is free software; you can redistribute it and/or </text>
+
+##File
+
+FileName: /Lander-master/source/satelliteware/libraries/DigitalTube/TM1637.h
+FileType: SOURCE
+FileChecksum: SHA1: 4e65e4318be421136e5564659bbcd0c8f76b026f
+LicenseConcluded: LGPL-2.1+
+LicenseInfoInFile: LGPL-2.1+
+FileCopyrightText: <text> author:frankie.chu
+//  date:9 april,2012
+//
+//  this library is free software; you can redistribute it and/or </text>
+
+##File
+
+FileName: /Lander-master/source/mobile/README.md
+FileType: OTHER
+FileChecksum: SHA1: b1d54ed298fb92aa39747d2eb97ad098cd227307
+LicenseConcluded: NOASSERTION
+LicenseInfoInFile: NOASSERTION
+FileCopyrightText: NOASSERTION
+
+##File
+
+FileName: /Lander-master/source/firmware/prj.mdef
+FileType: OTHER
+FileChecksum: SHA1: 1fc92c0735be74b72b9123d89735cca9afa1e042
+LicenseConcluded: Apache-2.0
+LicenseInfoInFile: Apache-2.0
+FileCopyrightText: <text> http://www.apache.org/licenses/license-2.0 </text>
+
+##File
+
+FileName: /Lander-master/source/firmware/prj_x86.conf
+FileType: OTHER
+FileChecksum: SHA1: 3dcee5ab6a61103d5f05ed70962d748cba59a18a
+LicenseConcluded: Apache-2.0
+LicenseInfoInFile: Apache-2.0
+FileCopyrightText: <text> http://www.apache.org/licenses/license-2.0, copyright (c) 2015, wind river systems, inc.
+#
+# licensed under the apache license, version 2.0 (the "license"); </text>
+
+##File
+
+FileName: /Lander-master/source/firmware/README.md
+FileType: OTHER
+FileChecksum: SHA1: e20ccc778544d12f08f0a83b3e8cbb9ac0b0bd53
+LicenseConcluded: NOASSERTION
+LicenseInfoInFile: NOASSERTION
+FileCopyrightText: NOASSERTION
+
+##File
+
+FileName: /Lander-master/source/firmware/README.txt
+FileType: OTHER
+FileChecksum: SHA1: 93759fccf2a070fcb096357a798da21ee44b8e48
+LicenseConcluded: NOASSERTION
+LicenseInfoInFile: NOASSERTION
+FileCopyrightText: NOASSERTION
+
+##File
+
+FileName: /Lander-master/source/firmware/src/Adafruit_LEDBackpack.c
+FileType: SOURCE
+FileChecksum: SHA1: 0591e994f5e0c88973a70763f0dd9fb4d06e65e7
+LicenseConcluded: MIT
+LicenseInfoInFile: MIT
+FileCopyrightText: <text> http://www.adafruit.com/products/, david.reyna@windriver.com, vincent.rubiolo@windriver.com </text>
+FileNotice: <text> // Adafruit_LEDBackpack.c :
+/***************************************************
+This is a library for our I2C LED Backpacks
+
+Designed specifically to work with the Adafruit LED Matrix backpacks
+----> http://www.adafruit.com/products/
+----> http://www.adafruit.com/products/
+
+These displays use I2C to communicate, 2 pins are required to
+interface. There are multiple selectable I2C addresses. For backpacks
+with 2 Address Select pins: 0x70, 0x71, 0x72 or 0x73. For backpacks
+with 3 Address Select pins: 0x70 thru 0x77
+
+Adafruit invests time and resources providing this open source code,
+please support Adafruit and open-source hardware by purchasing
+products from Adafruit!
+
+Written by Limor Fried/Ladyada for Adafruit Industries.
+MIT license, all text above must be included in any redistribution
+****************************************************/
+/***************************************************
+* modified to the Rocket API, interger support only
+* <credits>
+*   { Vincent Rubiolo, vincent.rubiolo@windriver.com,  },
+*   { David Reyna,  david.reyna@windriver.com,  },
+* </credits>
+****************************************************/
+/* LED segment bit values:
+ </text>
+
+##File
+
+FileName: /Lander-master/source/firmware/src/Adafruit_LEDBackpack.h
+FileType: SOURCE
+FileChecksum: SHA1: 63260df57a7d4dd5561aa195feb1b8475c4ad2d7
+LicenseConcluded: MIT
+LicenseInfoInFile: MIT
+FileCopyrightText: <text> http://www.adafruit.com/products/, david.reyna@windriver.com, vincent.rubiolo@windriver.com </text>
+FileNotice: <text> // Adafruit_LEDBackpack.h :
+/***************************************************
+This is a library for our I2C LED Backpacks
+
+Designed specifically to work with the Adafruit LED Matrix backpacks
+----> http://www.adafruit.com/products/
+----> http://www.adafruit.com/products/
+
+These displays use I2C to communicate, 2 pins are required to
+interface. There are multiple selectable I2C addresses. For backpacks
+with 2 Address Select pins: 0x70, 0x71, 0x72 or 0x73. For backpacks
+with 3 Address Select pins: 0x70 thru 0x77
+
+Adafruit invests time and resources providing this open source code,
+please support Adafruit and open-source hardware by purchasing
+products from Adafruit!
+
+Written by Limor Fried/Ladyada for Adafruit Industries.
+MIT license, all text above must be included in any redistribution
+****************************************************/
+/***************************************************
+* modified to the Rocket API, interger support only
+* <credits>
+*   { Vincent Rubiolo, vincent.rubiolo@windriver.com,  },
+*   { David Reyna,  david.reyna@windriver.com,  },
+* </credits>
+****************************************************/
+// typedef char uint8_t;
+// typedef short uint16_t;
+// typedef unsigned int uint32_t;
+// typedef uint32_t size_t;
+ </text>
+
+##File
+
+FileName: /Lander-master/source/firmware/src/galileo2ADCPWM.h
+FileType: SOURCE
+FileChecksum: SHA1: 3b961abc771b39d099da94494bb05650c42ca8cb
+LicenseConcluded: Apache-2.0
+LicenseInfoInFile: Apache-2.0
+FileCopyrightText: <text> http://www.apache.org/licenses/license-2.0, copyright (c) 2015, wind river systems, inc.
+ *
+ * licensed under the apache license, version 2.0 (the "license"); </text>
+
+##File
+
+FileName: /Lander-master/source/firmware/src/main.c
+FileType: SOURCE
+FileChecksum: SHA1: 5f0d4cbcc134d2cb033e0ff01a56be6e7cc070a0
+LicenseConcluded: Apache-2.0
+LicenseInfoInFile: Apache-2.0
+FileCopyrightText: <text> http://www.apache.org/licenses/license-2.0, david.reyna@windriver.com, copyright (c) 2016 wind river systems, inc.
+ *
+ * licensed under the apache license, version 2.0 (the "license"); </text>
+
+##File
+
+FileName: /Lander-master/source/firmware/src/rocket.h
+FileType: SOURCE
+FileChecksum: SHA1: 69681d6ad3ec6e3d0676ad4a0b16dda72bb5519c
+LicenseConcluded: Apache-2.0
+LicenseInfoInFile: Apache-2.0
+FileCopyrightText: <text> http://www.apache.org/licenses/license-2.0, david.reyna@windriver.com, copyright (c) 2016 wind river systems, inc.
+ *
+ * licensed under the apache license, version 2.0 (the "license"); </text>
+
+##File
+
+FileName: /Lander-master/source/firmware/src/rocket_math.c
+FileType: SOURCE
+FileChecksum: SHA1: 54ab8e09db2da938de2b3cb6d404b6547fd63745
+LicenseConcluded: Apache-2.0
+LicenseInfoInFile: Apache-2.0
+FileCopyrightText: <text> http://www.apache.org/licenses/license-2.0, david.reyna@windriver.com, copyright (c) 2016 wind river systems, inc.
+ *
+ * licensed under the apache license, version 2.0 (the "license"); </text>
+
+##File
+
+FileName: /Lander-master/source/firmware/src/rocket_math.h
+FileType: SOURCE
+FileChecksum: SHA1: 301dc02716148747ffc424e41fe11251d08391e5
+LicenseConcluded: Apache-2.0
+LicenseInfoInFile: Apache-2.0
+FileCopyrightText: <text> http://www.apache.org/licenses/license-2.0, david.reyna@windriver.com, copyright (c) 2016 wind river systems, inc.
+ *
+ * licensed under the apache license, version 2.0 (the "license"); </text>
+
+##File
+
+FileName: /Lander-master/source/firmware/src/rocket_space.c
+FileType: SOURCE
+FileChecksum: SHA1: b0e4bf8ca03cc6ac5f45b19716283b678487939a
+LicenseConcluded: Apache-2.0
+LicenseInfoInFile: Apache-2.0
+FileCopyrightText: <text> http://www.apache.org/licenses/license-2.0, david.reyna@windriver.com, copyright (c) 2016 wind river systems, inc.
+ *
+ * licensed under the apache license, version 2.0 (the "license"); </text>
+
+##File
+
+FileName: /Lander-master/source/firmware/src/rocket_space.h
+FileType: SOURCE
+FileChecksum: SHA1: 2df113866224fbb8a76472a010c0aff2569c3d8b
+LicenseConcluded: Apache-2.0
+LicenseInfoInFile: Apache-2.0
+FileCopyrightText: <text> http://www.apache.org/licenses/license-2.0, david.reyna@windriver.com, copyright (c) 2016 wind river systems, inc.
+ *
+ * licensed under the apache license, version 2.0 (the "license"); </text>
+
+##File
+
+FileName: /Lander-master/source/firmware/src/rocket_state.c
+FileType: SOURCE
+FileChecksum: SHA1: 686847446bd7d5aea68a8fde486e08a852e5c63b
+LicenseConcluded: Apache-2.0
+LicenseInfoInFile: Apache-2.0
+FileCopyrightText: <text> http://www.apache.org/licenses/license-2.0, david.reyna@windriver.com, (c) state exit
+ *  - the sanity test validates the content of the state table, copyright (c) 2016 wind river systems, inc.
+ *
+ * licensed under the apache license, version 2.0 (the "license"); </text>
+
+##File
+
+FileName: /Lander-master/source/firmware/src/rocket_state.h
+FileType: SOURCE
+FileChecksum: SHA1: 70e9e880437fffa7fbd0a3c490baa7bdeca17928
+LicenseConcluded: Apache-2.0
+LicenseInfoInFile: Apache-2.0
+FileCopyrightText: <text> http://www.apache.org/licenses/license-2.0, david.reyna@windriver.com, copyright (c) 2016 wind river systems, inc.
+ *
+ * licensed under the apache license, version 2.0 (the "license"); </text>
+
+##File
+
+FileName: /Lander-master/source/firmware/src/setup.c
+FileType: SOURCE
+FileChecksum: SHA1: 45938a23cd02bf4053fd7fa379bebfa75d4390f8
+LicenseConcluded: Apache-2.0
+LicenseInfoInFile: Apache-2.0
+FileCopyrightText: <text> http://www.apache.org/licenses/license-2.0, copyright (c) 2015, wind river systems, inc.
+ *
+ * licensed under the apache license, version 2.0 (the "license"); </text>
+
+##File
+
+FileName: /Lander-master/source/edison/arduino_edison.py
+FileType: SOURCE
+FileChecksum: SHA1: f1a6335d446fbbf7339e84d4b1ca09cf21a1143b
+LicenseConcluded: Apache-2.0
+LicenseInfoInFile: Apache-2.0
+FileCopyrightText: <text> http://www.apache.org/licenses/license-2.0, copyright (c) 2016 wind river systems, inc.
+#
+# licensed under the apache license, version 2.0 (the "license"); </text>
+
+##File
+
+FileName: /Lander-master/source/edison/bluetoothstartup.sh
+FileType: SOURCE
+FileChecksum: SHA1: 6be155719bcbbbda5da5836060e7efa6011428f3
+LicenseConcluded: Apache-2.0
+LicenseInfoInFile: Apache-2.0
+FileCopyrightText: <text> http://www.apache.org/licenses/license-2.0, copyright (c) 2016 wind river systems, inc.
+#
+# licensed under the apache license, version 2.0 (the "license"); </text>
+
+##File
+
+FileName: /Lander-master/source/edison/bluezutils.py
+FileType: SOURCE
+FileChecksum: SHA1: 46a3ba4478510a9b9ec729571d3cef28bcdeba14
+LicenseConcluded: Apache-2.0
+LicenseInfoInFile: Apache-2.0
+FileCopyrightText: <text> http://www.apache.org/licenses/license-2.0, http://git.kernel.org/cgit/bluetooth/bluez.git/tree/test/bluezutils.py, copyright (c) 2016 wind river systems, inc.
+#
+# licensed under the apache license, version 2.0 (the "license"); </text>
+
+##File
+
+FileName: /Lander-master/source/edison/enable_serial_edison.js.txt
+FileType: OTHER
+FileChecksum: SHA1: 57e119ac91ee846b321b52cb74761f7c6b34c4b8
+LicenseConcluded: NOASSERTION
+LicenseInfoInFile: NOASSERTION
+FileCopyrightText: NOASSERTION
+
+##File
+
+FileName: /Lander-master/source/edison/README.md
+FileType: OTHER
+FileChecksum: SHA1: 688507a1a8906bc54871caef4e04b73f6ccdae27
+LicenseConcluded: NOASSERTION
+LicenseInfoInFile: NOASSERTION
+FileCopyrightText: <text> mojo3@jupiter.com </text>
+
+##File
+
+FileName: /Lander-master/source/edison/rocketLanderRest.py
+FileType: SOURCE
+FileChecksum: SHA1: 2e3191b1afd8311421046f53ceb8d036b444b4b3
+LicenseConcluded: Apache-2.0
+LicenseInfoInFile: Apache-2.0
+FileCopyrightText: <text> http://128.224.186.83:3000/api/lander'', http://www.apache.org/licenses/license-2.0, copyright (c) 2016 wind river systems, inc.
+#
+# licensed under the apache license, version 2.0 (the "license"); </text>
+
+##File
+
+FileName: /Lander-master/source/edison/rocketLanderStart
+FileType: OTHER
+FileChecksum: SHA1: 7731cc2ec7fd8ce92722223c7a4f98fd42368a6d
+LicenseConcluded: Apache-2.0
+LicenseInfoInFile: Apache-2.0
+FileCopyrightText: <text> http://www.apache.org/licenses/license-2.0, copyright (c) 2016 wind river systems, inc.
+#
+# licensed under the apache license, version 2.0 (the "license"); </text>
+
+##File
+
+FileName: /Lander-master/source/edison/simple-agent.py
+FileType: SOURCE
+FileChecksum: SHA1: dbf4fed6146fc9554aa908a1bad18ec23425b331
+LicenseConcluded: Apache-2.0
+LicenseInfoInFile: Apache-2.0
+FileCopyrightText: <text> http://git.kernel.org/cgit/bluetooth/bluez.git/tree/test/simple-agent, http://www.apache.org/licenses/license-2.0, copyright (c) 2016 wind river systems, inc.
+#
+# licensed under the apache license, version 2.0 (the "license"); </text>
+
+##File
+
+FileName: /Lander-master/source/edison/SPP-loopback.py
+FileType: SOURCE
+FileChecksum: SHA1: 7e0b605adbd52b0080afdb31b48f93e83e383683
+LicenseConcluded: Apache-2.0
+LicenseInfoInFile: Apache-2.0
+FileCopyrightText: <text> http://www.apache.org/licenses/license-2.0, copyright (c) 2016 wind river systems, inc.
+#
+# licensed under the apache license, version 2.0 (the "license"); </text>
+
+##File
+
+FileName: /Lander-master/cad/lander_drum.scad
+FileType: OTHER
+FileChecksum: SHA1: 2d00513d0ae78acbd88036b354d29f4da5024cb1
+LicenseConcluded: NOASSERTION
+LicenseInfoInFile: NOASSERTION
+FileCopyrightText: <text> karlma@in.tum.de </text>
+
+##File
+
+FileName: /Lander-master/cad/lander_drum275.scad
+FileType: OTHER
+FileChecksum: SHA1: 98aae0d635a5c60a95d18fe5bc764a10cd23db99
+LicenseConcluded: NOASSERTION
+LicenseInfoInFile: NOASSERTION
+FileCopyrightText: <text> karlma@in.tum.de </text>
+
+##File
+
+FileName: /Lander-master/cad/README.md
+FileType: OTHER
+FileChecksum: SHA1: 18ddffe602f0290afd7c572025a30e85f94a037b
+LicenseConcluded: NOASSERTION
+LicenseInfoInFile: NOASSERTION
+FileCopyrightText: NOASSERTION
+
+##File
+
+FileName: /Lander-master/cad/stl/holder-nema-14.stl
+FileType: OTHER
+FileChecksum: SHA1: 0f394afb0a30a7a1987f6bffdf9aebdfc2901a70
+LicenseConcluded: NOASSERTION
+LicenseInfoInFile: NOASSERTION
+FileCopyrightText: NOASSERTION
+
+##File
+
+FileName: /Lander-master/cad/stl/Lander - 2020 Footer.stl
+FileType: OTHER
+FileChecksum: SHA1: 09723237c128ec6cd2082e9fe19e681226e7c983
+LicenseConcluded: NOASSERTION
+LicenseInfoInFile: NOASSERTION
+FileCopyrightText: NOASSERTION
+
+##File
+
+FileName: /Lander-master/cad/stl/Lander - mf-bar.gcode
+FileType: OTHER
+FileChecksum: SHA1: 53b3ab9dd8a1c09920bed92b4c6229202096c84c
+LicenseConcluded: NOASSERTION
+LicenseInfoInFile: NOASSERTION
+FileCopyrightText: NOASSERTION
+
+##File
+
+FileName: /Lander-master/cad/stl/Lander - mf-bar.stl
+FileType: OTHER
+FileChecksum: SHA1: c1ec27a9e2dd81473e3c6445e5f69f5316529856
+LicenseConcluded: NOASSERTION
+LicenseInfoInFile: NOASSERTION
+FileCopyrightText: NOASSERTION
+
+##File
+
+FileName: /Lander-master/cad/stl/Lander - mf-bar.zip
+FileType: ARCHIVE
+FileChecksum: SHA1: 33df9151cb650a0987d625834fc6cc3d9687af38
+LicenseConcluded: NOASSERTION
+LicenseInfoInFile: NOASSERTION
+FileCopyrightText: NOASSERTION
+
+##File
+
+FileName: /Lander-master/cad/stl/landers.gcode
+FileType: OTHER
+FileChecksum: SHA1: 9e5da88f34e5aab73067021995666983df8971be
+LicenseConcluded: NOASSERTION
+LicenseInfoInFile: NOASSERTION
+FileCopyrightText: NOASSERTION
+
+##File
+
+FileName: /Lander-master/cad/stl/lander_drum.stl
+FileType: OTHER
+FileChecksum: SHA1: 75a2470edbb2bca0cad89a4d659047ceefd060ad
+LicenseConcluded: NOASSERTION
+LicenseInfoInFile: NOASSERTION
+FileCopyrightText: NOASSERTION
+
+##File
+
+FileName: /Lander-master/cad/stl/lander_drum275flat.stl
+FileType: OTHER
+FileChecksum: SHA1: 41e1e818021a9c7e47cb6ec1add618237ad58f04
+LicenseConcluded: NOASSERTION
+LicenseInfoInFile: NOASSERTION
+FileCopyrightText: NOASSERTION
+
+##File
+
+FileName: /Lander-master/cad/stl/lander_drum285flat.stl
+FileType: OTHER
+FileChecksum: SHA1: e1974b377e94195f16c768aa6af3d111ca2eb5fd
+LicenseConcluded: NOASSERTION
+LicenseInfoInFile: NOASSERTION
+FileCopyrightText: NOASSERTION
+
+##File
+
+FileName: /Lander-master/cad/stl/lander_drum28flat.stl
+FileType: OTHER
+FileChecksum: SHA1: 8991dc22bd178df050b681b5b6e58d875aa70e75
+LicenseConcluded: NOASSERTION
+LicenseInfoInFile: NOASSERTION
+FileCopyrightText: NOASSERTION
+
+##File
+
+FileName: /Lander-master/cad/stl/Lunar_Lander__fixed_.stl
+FileType: OTHER
+FileChecksum: SHA1: c1c4732bd17823ea2ebb19587d2a85281c2d810d
+LicenseConcluded: NOASSERTION
+LicenseInfoInFile: NOASSERTION
+FileCopyrightText: NOASSERTION
+
+##File
+
+FileName: /Lander-master/cad/stl/MarsLander3.stl
+FileType: OTHER
+FileChecksum: SHA1: aa74fa30d85392568f0e010ec1248bdd90b9563f
+LicenseConcluded: NOASSERTION
+LicenseInfoInFile: NOASSERTION
+FileCopyrightText: NOASSERTION
+
+##File
+
+FileName: /Lander-master/cad/stl/t-slot_insert.stl
+FileType: OTHER
+FileChecksum: SHA1: c92153ac64d080efc080fec24935afb6e786f924
+LicenseConcluded: NOASSERTION
+LicenseInfoInFile: NOASSERTION
+FileCopyrightText: NOASSERTION
+
+##File
+
+FileName: /Lander-master/cad/stl/t-slot_insert_10pcs.stl
+FileType: OTHER
+FileChecksum: SHA1: 6c7d504dda0192b98db2a7d118e6992ad7c2ced3
+LicenseConcluded: NOASSERTION
+LicenseInfoInFile: NOASSERTION
+FileCopyrightText: NOASSERTION
+
+##File
+
+FileName: /Lander-master/cad/stl/Lander - mf-bar/Lander - mf-bar.gcode
+FileType: OTHER
+FileChecksum: SHA1: 6c1df80ba28b7f801708282f0c05fce7d6d5a9f2
+LicenseConcluded: NOASSERTION
+LicenseInfoInFile: NOASSERTION
+FileCopyrightText: NOASSERTION
+
+##File
+
+FileName: /Lander-master/cad/Nema_14_Motor_Cover_01/Nema_14_End_Cover_01.stl
+FileType: OTHER
+FileChecksum: SHA1: 50b6fd0cc972f48a0b6d4bb422d9696e6dcb13f1
+LicenseConcluded: NOASSERTION
+LicenseInfoInFile: NOASSERTION
+FileCopyrightText: NOASSERTION
+
+##File
+
+FileName: /Lander-master/cad/Nema_14_Motor_Cover_01/Nema_14_End_Cover_01.stp
+FileType: OTHER
+FileChecksum: SHA1: 25e501f012bd94e0f78b8c1046de893956d049ee
+LicenseConcluded: NOASSERTION
+LicenseInfoInFile: NOASSERTION
+FileCopyrightText: NOASSERTION
+
+##--------------------
+## Review Information
+##--------------------
+Reviewer: Tool: The Duke of Highlander
+ReviewDate: 2016-10-13T06:31:30Z
+ReviewComment: <text> The analysis has been completely performed by an automated tool.  [---Q:LD,F:1.4,H:1.1,SV:1.1---]</text>
