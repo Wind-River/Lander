@@ -1,5 +1,7 @@
-//  Author:Frankie.Chu
-//  Date:9 April,2012
+/**
+ * @author Frankie.Chu
+ * @date 9 April, 2012
+ */
 //
 //  This library is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU Lesser General Public
