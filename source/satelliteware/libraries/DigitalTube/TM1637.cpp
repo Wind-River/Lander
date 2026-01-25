@@ -16,10 +16,12 @@
 //  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 //  Modified record:
-//    Author: david.reyna@windriver.com
-//    Date: 12 February, 2016 - add ASCII support, patch for sync timeout, for Rocket/Galileo support
+//    Author: Frankie Chu
+//    Date: 9 April 2012
 //
 /*******************************************************************************/
+
+
 #include "TM1637.h"
 #include <Arduino.h>
 static int8_t TubeTab[] = {0x3f,0x06,0x5b,0x4f,
